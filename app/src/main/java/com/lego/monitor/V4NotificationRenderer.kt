@@ -12,7 +12,6 @@ import android.os.Build
 import android.text.SpannableStringBuilder
 import android.text.Spanned
 import android.text.style.ForegroundColorSpan
-import android.text.style.StyleSpan
 import android.util.Log
 import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
@@ -86,19 +85,21 @@ object V4NotificationRenderer {
         val collapsed = RemoteViews(ctx.packageName, R.layout.notification_collapsed)
         val expanded  = RemoteViews(ctx.packageName, R.layout.notification_expanded)
 
-        val brandColor = brandColorFor(p.brand)
-        val titleText  = brandTitleSpannable(p, brandColor)
-        val subtitle   = setNameLine(p)
+        val brandDrawable = brandDrawableFor(p.brand)
+        val titleTail = brandTitleTailSpannable(p)
+        val subtitle  = setNameLine(p)
 
         // Collapsed (heads-up + lock-screen) — single-line layout with
-        // thumb on the left.
-        collapsed.setTextViewText(R.id.notif_title, titleText)
+        // thumb on the left + brand wordmark + pct.
+        collapsed.setImageViewResource(R.id.notif_brand_logo, brandDrawable)
+        collapsed.setTextViewText(R.id.notif_title_tail, titleTail)
         collapsed.setTextViewText(R.id.notif_subtitle, subtitle)
 
         // Expanded — text gets full width, image goes at the bottom.
         // Each grid row is 4 separate cells so they can't wrap into
         // each other regardless of length.
-        expanded.setTextViewText(R.id.notif_title, titleText)
+        expanded.setImageViewResource(R.id.notif_brand_logo, brandDrawable)
+        expanded.setTextViewText(R.id.notif_title_tail, titleTail)
         expanded.setTextViewText(R.id.notif_setname, subtitle)
         fillGridRow(expanded, p, top = true)
         fillGridRow(expanded, p, top = false)
@@ -135,24 +136,32 @@ object V4NotificationRenderer {
             .notify(notifId, builder.build())
     }
 
-    /** "Vinted • 56%" or "eBay • 31% • 🔨 17m" with the brand word
-     * coloured + bold-italic for Vinted to evoke its branding. */
-    private fun brandTitleSpannable(p: V4Payload, brandColor: Int): CharSequence {
-        val brand = brandLabel(p.brand)
-        val timer = if (p.isAuction && p.minsLeft != null) " • 🔨 ${p.minsLeft}m" else ""
-        val tail  = " • ${p.pct}%${timer}"
+    /** The text AFTER the brand wordmark — " • 56%" or
+     * " • 31% • 🔨 17m". The brand wordmark itself is set as an
+     * ImageView (brandDrawableFor) so it uses the actual SVG logo.
+     * The percentage span is coloured green so it matches the V4
+     * design ("green % next to ebay/vinted/facebook"). */
+    private fun brandTitleTailSpannable(p: V4Payload): CharSequence {
         val sb = SpannableStringBuilder()
-        sb.append(brand)
-        sb.setSpan(ForegroundColorSpan(brandColor), 0, brand.length,
-            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-        if (p.brand == "vinted") {
-            // Italic nod to Vinted's wordmark — RemoteViews supports
-            // StyleSpan reliably across Android versions.
-            sb.setSpan(StyleSpan(android.graphics.Typeface.BOLD_ITALIC),
-                0, brand.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        sb.append("• ")
+        val pctStart = sb.length
+        sb.append("${p.pct}%")
+        sb.setSpan(ForegroundColorSpan(Color.parseColor("#1F9D55")),
+            pctStart, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        if (p.isAuction && p.minsLeft != null) {
+            sb.append(" • 🔨 ${p.minsLeft}m")
         }
-        sb.append(tail)
         return sb
+    }
+
+    /** Drawable resource for the brand's wordmark. Falls back to the
+     * eBay drawable for unknown brands (extremely defensive — the V4
+     * parser already coerces brand into the known set). */
+    private fun brandDrawableFor(brand: String): Int = when (brand) {
+        "ebay"     -> R.drawable.brand_ebay
+        "vinted"   -> R.drawable.brand_vinted
+        "facebook" -> R.drawable.brand_facebook
+        else       -> R.drawable.brand_ebay
     }
 
     private fun setNameLine(p: V4Payload): CharSequence {
@@ -206,16 +215,6 @@ object V4NotificationRenderer {
         "vinted"   -> "Vinted"
         "facebook" -> "Facebook"
         else       -> brand.replaceFirstChar { it.uppercase() }
-    }
-
-    private fun brandColorFor(brand: String): Int = when (brand) {
-        // eBay's primary brand colours rotate red/blue/yellow/green —
-        // pick the red as the most recognisable single hue for the
-        // wordmark.
-        "ebay"     -> Color.parseColor("#E53238")
-        "vinted"   -> Color.parseColor("#09B1BA")
-        "facebook" -> Color.parseColor("#1877F2")
-        else       -> Color.WHITE
     }
 
     private fun addAction(

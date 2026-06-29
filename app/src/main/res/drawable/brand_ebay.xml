@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  eBay wordmark — converted from inline SVG in lego-monitor web UI
+  (templates/index.html ~line 2633). Four-letter rainbow: red 'e',
+  blue 'b', yellow 'a', green 'y'.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="60dp"
+    android:height="24dp"
+    android:viewportWidth="1000"
+    android:viewportHeight="401">
+    <path
+        android:fillColor="#F12C2D"
+        android:pathData="M200 186c-2-47-36-65-72-65-39 0-70 20-76 65zm-149 33c3 46 34 73 77 73 30 0 57-12 66-39h51c-10 54-67 72-116 72C39 325 0 276 0 209c0-73 41-121 130-121 70 0 122 37 122 118v13z"/>
+    <path
+        android:fillColor="#0968F6"
+        android:pathData="M381 291c46 0 78-34 78-85s-32-84-78-84c-47 0-79 34-79 84s32 85 79 85zM252 0h50v126c25-30 59-38 92-38 56 0 118 38 118 119 0 69-49 118-119 118-36 0-70-13-92-39 0 10-1 21-2 31h-49c1-16 2-36 2-52z"/>
+    <path
+        android:fillColor="#FFBC13"
+        android:pathData="M633 213c-45 1-74 10-74 40 0 19 16 40 55 40 53 0 81-29 81-76v-5c-18 0-41 0-62 1zm112 62c0 15 0 29 2 42h-47c-1-11-2-21-2-32-25 31-55 40-97 40-62 0-95-33-95-71 0-54 45-74 123-76 21 0 45 0 65 0v-5c0-37-23-52-64-52-30 0-52 13-55 34h-53c6-54 62-67 112-67 60 0 110 21 110 84z"/>
+    <path
+        android:fillColor="#93C822"
+        android:pathData="M1000 96L845 401h-56l44-85L717 96h59l86 172 85-172z"/>
+</vector>
