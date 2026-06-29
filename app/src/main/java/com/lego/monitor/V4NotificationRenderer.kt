@@ -89,17 +89,19 @@ object V4NotificationRenderer {
         val brandColor = brandColorFor(p.brand)
         val titleText  = brandTitleSpannable(p, brandColor)
         val subtitle   = setNameLine(p)
-        val gridTop    = gridLine(p, top = true)
-        val gridBot    = gridLine(p, top = false)
 
-        // Collapsed (heads-up + lock-screen)
+        // Collapsed (heads-up + lock-screen) — single-line layout with
+        // thumb on the left.
         collapsed.setTextViewText(R.id.notif_title, titleText)
         collapsed.setTextViewText(R.id.notif_subtitle, subtitle)
-        // Expanded
+
+        // Expanded — text gets full width, image goes at the bottom.
+        // Each grid row is 4 separate cells so they can't wrap into
+        // each other regardless of length.
         expanded.setTextViewText(R.id.notif_title, titleText)
         expanded.setTextViewText(R.id.notif_setname, subtitle)
-        expanded.setTextViewText(R.id.notif_grid_top, gridTop)
-        expanded.setTextViewText(R.id.notif_grid_bottom, gridBot)
+        fillGridRow(expanded, p, top = true)
+        fillGridRow(expanded, p, top = false)
 
         if (bmp != null) {
             collapsed.setImageViewBitmap(R.id.notif_thumb, bmp)
@@ -161,44 +163,42 @@ object V4NotificationRenderer {
         } else p.setName
     }
 
-    /** One of the two grid rows. Top row = New prices, bottom = Used.
-     * Each row: asking/total £ │ [B?: £X +Y%]  [E?: £X +Y%]
-     * Per-cell % is computed app-side from the market value and true
-     * cost so the colour-coding (green ≥0, red <0) lives next to the
-     * value rather than embedded in the JSON. */
-    private fun gridLine(p: V4Payload, top: Boolean): CharSequence {
-        val price = if (top) p.asking else p.trueCost
+    /** Populate one of the two grid rows. Top row = New prices, bottom
+     * = Used. Each cell is its own TextView in the layout so they
+     * can't wrap into each other. Per-cell % is computed app-side from
+     * the market value and true cost (green ≥0, red <0). */
+    private fun fillGridRow(rv: RemoteViews, p: V4Payload, top: Boolean) {
+        val price    = if (top) p.asking else p.trueCost
+        val priceStr = if (price < 100) "£%.2f".format(price) else "£%.0f".format(price)
         val (labA, valA) = if (top) "B N" to p.blNew else "B U" to p.blUsed
         val (labB, valB) = if (top) "E N" to p.ebNew else "E U" to p.ebUsed
-        val priceStr = if (price < 100) "£%.2f".format(price) else "£%.0f".format(price)
 
-        val sb = SpannableStringBuilder()
-        sb.append(priceStr.padEnd(8, ' '))
-        sb.append("│  ")
-        appendCell(sb, labA, valA, p.trueCost)
-        sb.append("  ")
-        appendCell(sb, labB, valB, p.trueCost)
-        return sb
+        val idPrice  = if (top) R.id.notif_r1_price  else R.id.notif_r2_price
+        val idCellA  = if (top) R.id.notif_r1_cell_a else R.id.notif_r2_cell_a
+        val idCellB  = if (top) R.id.notif_r1_cell_b else R.id.notif_r2_cell_b
+
+        rv.setTextViewText(idPrice, priceStr)
+        rv.setTextViewText(idCellA, cellSpannable(labA, valA, p.trueCost))
+        rv.setTextViewText(idCellB, cellSpannable(labB, valB, p.trueCost))
     }
 
-    private fun appendCell(
-        sb: SpannableStringBuilder, lab: String,
-        marketVal: Double, trueCost: Double
-    ) {
-        if (marketVal <= 0) {
-            sb.append("$lab: —")
-            return
-        }
+    /** One cell: "B N: £60 +33%" with the % coloured. Falls back to
+     * "B N: —" when the market price is missing. */
+    private fun cellSpannable(lab: String, marketVal: Double,
+                                trueCost: Double): CharSequence {
+        if (marketVal <= 0) return "$lab: —"
         val intVal = marketVal.roundToInt()
-        sb.append("$lab: £$intVal ")
         val pct = ((marketVal - trueCost) / marketVal * 100).roundToInt()
-        val start = sb.length
         val sign = if (pct >= 0) "+" else ""
+        val sb = SpannableStringBuilder()
+        sb.append("$lab: £$intVal ")
+        val start = sb.length
         sb.append("$sign$pct%")
         val color = if (pct >= 0) Color.parseColor("#1F9D55")
                      else          Color.parseColor("#D32F2F")
         sb.setSpan(ForegroundColorSpan(color), start, sb.length,
             Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        return sb
     }
 
     private fun brandLabel(brand: String): String = when (brand) {

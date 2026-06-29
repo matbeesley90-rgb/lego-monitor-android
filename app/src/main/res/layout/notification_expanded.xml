@@ -1,70 +1,133 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Expanded layout (big content). Mirrors the V4 design:
+  Expanded layout — V2 (2026-06-29).
 
-    [thumb]   Vinted • 56%                    [thumbnail right-aligned]
-              TIE Fighter Pilot Helmet · 75274
-              £63.00  │  B N: £240 +71%   E N: £300 +77%
-              £70.35  │  B U: £159 +56%   E U: £139 +49%
+  Vertical stack: title → set name → grid row 1 (New) → grid row 2 (Used)
+  → thumbnail at the bottom. Text gets the full notification width
+  (instead of sharing horizontal space with the thumb), and each grid
+  row is FOUR separate TextViews in a horizontal LinearLayout with
+  explicit weights — that way cells stay side-by-side regardless of
+  text length and Android can't wrap one cell's content into the next.
 
-  Brand colour + typeface set at render time via setTextColor +
-  setTypeface (where supported by RemoteViews — Android 13+).
+  Cells:
+    price    │   B?: £X +Y%        E?: £X +Y%
+    [r?_price] [r?_div] [r?_cell_a]    [r?_cell_b]
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:orientation="horizontal"
-    android:padding="12dp"
-    android:gravity="center_vertical">
+    android:orientation="vertical"
+    android:padding="12dp">
+
+    <TextView
+        android:id="@+id/notif_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:singleLine="true"
+        android:ellipsize="end" />
+
+    <TextView
+        android:id="@+id/notif_setname"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textSize="13sp"
+        android:singleLine="true"
+        android:ellipsize="end"
+        android:layout_marginTop="2dp" />
+
+    <!-- Grid row 1: New prices -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="8dp"
+        android:gravity="center_vertical">
+        <TextView
+            android:id="@+id/notif_r1_price"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="monospace"
+            android:textSize="12sp" />
+        <TextView
+            android:id="@+id/notif_r1_div"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="monospace"
+            android:textSize="12sp"
+            android:paddingStart="6dp"
+            android:paddingEnd="6dp"
+            android:text="│" />
+        <TextView
+            android:id="@+id/notif_r1_cell_a"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:fontFamily="monospace"
+            android:textSize="12sp"
+            android:singleLine="true"
+            android:ellipsize="end" />
+        <TextView
+            android:id="@+id/notif_r1_cell_b"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:fontFamily="monospace"
+            android:textSize="12sp"
+            android:singleLine="true"
+            android:ellipsize="end" />
+    </LinearLayout>
+
+    <!-- Grid row 2: Used prices -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="2dp"
+        android:gravity="center_vertical">
+        <TextView
+            android:id="@+id/notif_r2_price"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="monospace"
+            android:textSize="12sp" />
+        <TextView
+            android:id="@+id/notif_r2_div"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="monospace"
+            android:textSize="12sp"
+            android:paddingStart="6dp"
+            android:paddingEnd="6dp"
+            android:text="│" />
+        <TextView
+            android:id="@+id/notif_r2_cell_a"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:fontFamily="monospace"
+            android:textSize="12sp"
+            android:singleLine="true"
+            android:ellipsize="end" />
+        <TextView
+            android:id="@+id/notif_r2_cell_b"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:fontFamily="monospace"
+            android:textSize="12sp"
+            android:singleLine="true"
+            android:ellipsize="end" />
+    </LinearLayout>
 
     <ImageView
         android:id="@+id/notif_thumb"
-        android:layout_width="80dp"
-        android:layout_height="80dp"
+        android:layout_width="match_parent"
+        android:layout_height="160dp"
+        android:layout_marginTop="10dp"
         android:scaleType="centerCrop"
+        android:adjustViewBounds="true"
         android:contentDescription="@null" />
-
-    <LinearLayout
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:layout_marginStart="12dp"
-        android:orientation="vertical">
-
-        <TextView
-            android:id="@+id/notif_title"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:textSize="16sp"
-            android:textStyle="bold"
-            android:singleLine="true"
-            android:ellipsize="end" />
-
-        <TextView
-            android:id="@+id/notif_setname"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:textSize="13sp"
-            android:singleLine="true"
-            android:ellipsize="end"
-            android:layout_marginTop="2dp" />
-
-        <TextView
-            android:id="@+id/notif_grid_top"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:fontFamily="monospace"
-            android:textSize="12sp"
-            android:layout_marginTop="6dp" />
-
-        <TextView
-            android:id="@+id/notif_grid_bottom"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:fontFamily="monospace"
-            android:textSize="12sp"
-            android:layout_marginTop="2dp" />
-
-    </LinearLayout>
 
 </LinearLayout>
