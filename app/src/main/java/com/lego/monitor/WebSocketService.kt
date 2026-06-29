@@ -121,22 +121,36 @@ class WebSocketService : Service() {
      * We ignore non-"message" events (keepalive, open, etc.) silently.
      */
     private fun handleNtfyMessage(raw: String) {
+        // Always log the incoming frame (first 300 chars) so we can see
+        // whether the WS handler is even reached when a notification fails
+        // to render. Filter logcat with `adb logcat -s LegoWS LegoV4`.
+        Log.d(TAG, "WS rx ${raw.length}B: ${raw.take(300)}")
         try {
             val obj = JSONObject(raw)
-            if (obj.optString("event") != "message") return
+            val event = obj.optString("event")
+            if (event != "message") {
+                Log.d(TAG, "WS skip event=$event")
+                return
+            }
 
             // Phase 2: if the message body is V4 JSON, route to the
             // custom RemoteViews renderer. Otherwise fall back to the
             // Phase 1 stock notification path so a plain-text test
             // (e.g. curl -d "hello") still shows something useful.
-            val v4 = V4Payload.tryParse(obj.optString("message"))
+            val msgBody = obj.optString("message")
+            val v4 = V4Payload.tryParse(msgBody)
+            Log.d(TAG, "WS routing: v4_parsed=${v4 != null}  body_starts='${msgBody.take(60)}'")
             if (v4 != null) {
                 V4NotificationRenderer.show(applicationContext, obj, v4)
             } else {
                 NotificationRenderer.show(applicationContext, obj)
             }
         } catch (e: Exception) {
-            Log.w(TAG, "bad ntfy frame: ${e.message}")
+            // Full stack trace — Log.w(tag, msg, e) prints the throwable
+            // chain, not just .message. The old single-arg form is what
+            // hid the real exception during the Color.parseColor("#222")
+            // bug.
+            Log.e(TAG, "WS frame handler threw", e)
         }
     }
 

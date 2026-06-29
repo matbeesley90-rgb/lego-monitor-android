@@ -38,33 +38,44 @@ object V4NotificationRenderer {
     private val imageThread = Executors.newSingleThreadExecutor()
 
     fun show(ctx: Context, frame: org.json.JSONObject, payload: V4Payload) {
-        ensureChannel(ctx)
-        val msgId  = frame.optString("id")
-        val notifId = msgId.hashCode()
+        Log.d(TAG, "V4 show: brand=${payload.brand} kind=${payload.kind} pct=${payload.pct} setName='${payload.setName}'")
+        try {
+            ensureChannel(ctx)
+            val msgId  = frame.optString("id")
+            val notifId = msgId.hashCode()
 
-        // Build the bare notification synchronously, then post; if the
-        // image is in cache (and our /img/proxy sets a Cache-Control:
-        // public,max-age=86400), it lands almost instantly. Image
-        // download happens off-thread; once it finishes we re-post the
-        // same notifId with the bitmap filled in.
-        post(ctx, notifId, payload, bmp = null)
+            // Build the bare notification synchronously, then post; if the
+            // image is in cache (and our /img/proxy sets a Cache-Control:
+            // public,max-age=86400), it lands almost instantly. Image
+            // download happens off-thread; once it finishes we re-post the
+            // same notifId with the bitmap filled in.
+            Log.d(TAG, "V4 posting initial (no bitmap yet) notifId=$notifId")
+            post(ctx, notifId, payload, bmp = null)
+            Log.d(TAG, "V4 initial post ok")
 
-        if (payload.imageUrl.isNotBlank()) {
-            imageThread.execute {
-                try {
-                    val conn = URL(payload.imageUrl).openConnection()
-                    conn.connectTimeout = 5000
-                    conn.readTimeout = 10000
-                    conn.getInputStream().use { stream ->
-                        val bmp = BitmapFactory.decodeStream(stream)
-                        if (bmp != null) {
-                            post(ctx, notifId, payload, bmp)
+            if (payload.imageUrl.isNotBlank()) {
+                imageThread.execute {
+                    try {
+                        Log.d(TAG, "V4 fetching image: ${payload.imageUrl}")
+                        val conn = URL(payload.imageUrl).openConnection()
+                        conn.connectTimeout = 5000
+                        conn.readTimeout = 10000
+                        conn.getInputStream().use { stream ->
+                            val bmp = BitmapFactory.decodeStream(stream)
+                            if (bmp != null) {
+                                Log.d(TAG, "V4 image decoded ${bmp.width}x${bmp.height}, re-posting")
+                                post(ctx, notifId, payload, bmp)
+                            } else {
+                                Log.w(TAG, "V4 image decode returned null")
+                            }
                         }
+                    } catch (e: Exception) {
+                        Log.w(TAG, "V4 image fetch failed", e)
                     }
-                } catch (e: Exception) {
-                    Log.w(TAG, "image fetch failed: ${e.message}")
                 }
             }
+        } catch (e: Exception) {
+            Log.e(TAG, "V4 render threw", e)
         }
     }
 
@@ -98,9 +109,9 @@ object V4NotificationRenderer {
             // square keeps the layout from jumping when the bitmap
             // arrives in the second post.
             collapsed.setInt(R.id.notif_thumb,
-                "setBackgroundColor", Color.parseColor("#222"))
+                "setBackgroundColor", Color.parseColor("#222222"))
             expanded.setInt(R.id.notif_thumb,
-                "setBackgroundColor", Color.parseColor("#222"))
+                "setBackgroundColor", Color.parseColor("#222222"))
         }
 
         val builder = NotificationCompat.Builder(ctx, CHANNEL_ID)
