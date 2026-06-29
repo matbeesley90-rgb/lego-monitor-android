@@ -12,6 +12,7 @@ import android.os.Build
 import android.text.SpannableStringBuilder
 import android.text.Spanned
 import android.text.style.ForegroundColorSpan
+import android.text.style.StyleSpan
 import android.util.Log
 import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
@@ -172,13 +173,19 @@ object V4NotificationRenderer {
         } else p.setName
     }
 
-    /** Populate one of the two grid rows. Top row = New prices, bottom
-     * = Used. Each cell is its own TextView in the layout so they
-     * can't wrap into each other. Per-cell % is computed app-side from
-     * the market value and true cost (green ≥0, red <0). */
+    /** Populate one of the two grid rows. Top row = New prices (asking
+     * shown in big blue on the left), bottom row = Used (true cost in
+     * smaller amber). Per-cell % is computed app-side from the market
+     * value and true cost (green ≥0, red <0). */
     private fun fillGridRow(rv: RemoteViews, p: V4Payload, top: Boolean) {
-        val price    = if (top) p.asking else p.trueCost
-        val priceStr = if (price < 100) "£%.2f".format(price) else "£%.0f".format(price)
+        val priceStr = if (top) {
+            // Asking — big blue, no decimals (matches the design).
+            "£${p.asking.roundToInt()}"
+        } else {
+            // True cost — smaller amber, with decimals so the fees+
+            // postage maths is visible at a glance.
+            "£%.2f".format(p.trueCost)
+        }
         val (labA, valA) = if (top) "B N" to p.blNew else "B U" to p.blUsed
         val (labB, valB) = if (top) "E N" to p.ebNew else "E U" to p.ebUsed
 
@@ -191,22 +198,46 @@ object V4NotificationRenderer {
         rv.setTextViewText(idCellB, cellSpannable(labB, valB, p.trueCost))
     }
 
-    /** One cell: "B N: £60 +33%" with the % coloured. Falls back to
-     * "B N: —" when the market price is missing. */
+    /** One cell rendered as a SpannableString:
+     *   [grey]B N:[/] [bold white]£240[/] [green]+74%[/]
+     * Three styled segments in one TextView so the cell visually
+     * matches the listing-card design without needing 3 TextViews
+     * per cell. */
     private fun cellSpannable(lab: String, marketVal: Double,
                                 trueCost: Double): CharSequence {
-        if (marketVal <= 0) return "$lab: —"
-        val intVal = marketVal.roundToInt()
+        val sb = SpannableStringBuilder()
+
+        // Label "B N:" in muted grey.
+        sb.append("$lab: ")
+        sb.setSpan(ForegroundColorSpan(Color.parseColor("#9AA0A6")),
+            0, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+
+        if (marketVal <= 0) {
+            sb.append("—")
+            return sb
+        }
+
+        // Value "£240" in bold white.
+        val valStart = sb.length
+        sb.append("£${marketVal.roundToInt()}")
+        sb.setSpan(ForegroundColorSpan(Color.WHITE),
+            valStart, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        sb.setSpan(StyleSpan(android.graphics.Typeface.BOLD),
+            valStart, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+
+        // Percentage "+74%" in green / red.
+        sb.append(" ")
         val pct = ((marketVal - trueCost) / marketVal * 100).roundToInt()
         val sign = if (pct >= 0) "+" else ""
-        val sb = SpannableStringBuilder()
-        sb.append("$lab: £$intVal ")
-        val start = sb.length
+        val pctStart = sb.length
         sb.append("$sign$pct%")
-        val color = if (pct >= 0) Color.parseColor("#1F9D55")
-                     else          Color.parseColor("#D32F2F")
-        sb.setSpan(ForegroundColorSpan(color), start, sb.length,
-            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        val pctColor = if (pct >= 0) Color.parseColor("#22C55E")
+                       else           Color.parseColor("#EF4444")
+        sb.setSpan(ForegroundColorSpan(pctColor),
+            pctStart, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        sb.setSpan(StyleSpan(android.graphics.Typeface.BOLD),
+            pctStart, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+
         return sb
     }
 
