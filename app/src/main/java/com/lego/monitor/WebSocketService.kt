@@ -124,7 +124,17 @@ class WebSocketService : Service() {
         try {
             val obj = JSONObject(raw)
             if (obj.optString("event") != "message") return
-            NotificationRenderer.show(applicationContext, obj)
+
+            // Phase 2: if the message body is V4 JSON, route to the
+            // custom RemoteViews renderer. Otherwise fall back to the
+            // Phase 1 stock notification path so a plain-text test
+            // (e.g. curl -d "hello") still shows something useful.
+            val v4 = V4Payload.tryParse(obj.optString("message"))
+            if (v4 != null) {
+                V4NotificationRenderer.show(applicationContext, obj, v4)
+            } else {
+                NotificationRenderer.show(applicationContext, obj)
+            }
         } catch (e: Exception) {
             Log.w(TAG, "bad ntfy frame: ${e.message}")
         }
