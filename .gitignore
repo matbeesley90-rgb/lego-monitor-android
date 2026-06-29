@@ -1,0 +1,20 @@
+# Gradle
+.gradle/
+build/
+**/build/
+local.properties
+.idea/
+*.iml
+
+# Android Studio caches
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Keystores — never commit
+*.jks
+*.keystore
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">LEGO Monitor</string>
+    <string name="initial_status">LEGO Monitor — Starting…</string>
+</resources>
