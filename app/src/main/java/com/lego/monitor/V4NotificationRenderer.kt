@@ -93,22 +93,21 @@ object V4NotificationRenderer {
         val subtitle  = setNameLine(p)
 
         // Title path forks on kind:
-        //   • watchlist → use the Pi's wire title verbatim ("👁 eBay •
-        //     Set Name • £340"); hide the brand wordmark since the
-        //     platform name is already in the title.
+        //   • watchlist → brand wordmark image + Pi's wire title
+        //     verbatim ("👁 Set Name • £340") — no spans, no pct
+        //     (watchlist alerts don't have a headline %).
         //   • deal / auction → brand wordmark + RelativeSizeSpan pct.
+        val brandDrawable = brandDrawableFor(p.brand)
+        collapsed.setImageViewResource(R.id.notif_brand_logo, brandDrawable)
+        expanded.setImageViewResource(R.id.notif_brand_logo, brandDrawable)
+        collapsed.setViewVisibility(R.id.notif_brand_logo, View.VISIBLE)
+        expanded.setViewVisibility(R.id.notif_brand_logo, View.VISIBLE)
+
         if (p.isWatchlist) {
-            collapsed.setViewVisibility(R.id.notif_brand_logo, View.GONE)
-            expanded.setViewVisibility(R.id.notif_brand_logo, View.GONE)
             collapsed.setTextViewText(R.id.notif_title_tail, p.wireTitle)
             expanded.setTextViewText(R.id.notif_title_tail, p.wireTitle)
         } else {
-            val brandDrawable = brandDrawableFor(p.brand)
             val titleTail = brandTitleTailSpannable(p)
-            collapsed.setViewVisibility(R.id.notif_brand_logo, View.VISIBLE)
-            expanded.setViewVisibility(R.id.notif_brand_logo, View.VISIBLE)
-            collapsed.setImageViewResource(R.id.notif_brand_logo, brandDrawable)
-            expanded.setImageViewResource(R.id.notif_brand_logo, brandDrawable)
             collapsed.setTextViewText(R.id.notif_title_tail, titleTail)
             expanded.setTextViewText(R.id.notif_title_tail, titleTail)
         }
