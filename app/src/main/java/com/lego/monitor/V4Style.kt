@@ -4,6 +4,19 @@ import android.graphics.Color
 import org.json.JSONObject
 
 /**
+ * Per-cell style. Each of the four grid cells (B N / E N / B U / E U)
+ * resolves to one of these — either via its `cells.{key}` override or
+ * by inheriting from the shared `cell.*` block in the V4 payload.
+ */
+data class CellStyle(
+    val sizeSp: Float,
+    val labelColor: Int,
+    val valueColor: Int,
+    val pctPosColor: Int,
+    val pctNegColor: Int,
+)
+
+/**
  * Runtime-tunable styling for V4 notifications. Pi includes a `style`
  * block in the V4 JSON payload; this class parses it (tolerantly —
  * any missing field falls back to the [Defaults] value, matching the
@@ -28,17 +41,27 @@ data class V4Style(
     val dividerSp: Float,
     val dividerColor: Int,
 
-    val cellSp: Float,
-    val cellLabelColor: Int,
-    val cellValueColor: Int,
-    val cellPosColor: Int,
-    val cellNegColor: Int,
+    // Per-cell styles — already-resolved (override merged into defaults)
+    // so the renderer doesn't have to walk back to the shared `cell`
+    // block.
+    val cellBN: CellStyle,
+    val cellEN: CellStyle,
+    val cellBU: CellStyle,
+    val cellEU: CellStyle,
 
     val setNameSp: Float,
     val cellGapDp: Int,      // horizontal gap between cell_a and cell_b
     val rowGapDp: Int,       // vertical gap between grid row 1 and row 2
 ) {
     companion object Defaults {
+        val CELL_DEFAULT = CellStyle(
+            sizeSp      = 11f,
+            labelColor  = Color.parseColor("#9AA0A6"),
+            valueColor  = Color.WHITE,
+            pctPosColor = Color.parseColor("#22C55E"),
+            pctNegColor = Color.parseColor("#EF4444"),
+        )
+
         // Defaults intentionally match the current baked-in layout
         // values — see notification_expanded.xml + V4NotificationRenderer.
         val DEFAULT = V4Style(
@@ -56,11 +79,10 @@ data class V4Style(
             dividerSp    = 14f,
             dividerColor = Color.parseColor("#555555"),
 
-            cellSp         = 11f,
-            cellLabelColor = Color.parseColor("#9AA0A6"),
-            cellValueColor = Color.WHITE,
-            cellPosColor   = Color.parseColor("#22C55E"),
-            cellNegColor   = Color.parseColor("#EF4444"),
+            cellBN = CELL_DEFAULT,
+            cellEN = CELL_DEFAULT,
+            cellBU = CELL_DEFAULT,
+            cellEU = CELL_DEFAULT,
 
             setNameSp = 13f,
             cellGapDp = 6,
@@ -77,6 +99,7 @@ data class V4Style(
             val trueCost = root.optJSONObject("true_cost")
             val divider  = root.optJSONObject("divider")
             val cell     = root.optJSONObject("cell")
+            val cells    = root.optJSONObject("cells")
             val setName  = root.optJSONObject("set_name")
             val brand    = root.optJSONObject("brand")
 
@@ -88,6 +111,31 @@ data class V4Style(
                 val s = o?.optString(k, "") ?: ""
                 if (s.isBlank()) return fb
                 return try { Color.parseColor(s) } catch (_: Exception) { fb }
+            }
+
+            // Cell defaults come from the shared `cell.*` block (backward
+            // compat with style JSON saved before per-cell overrides
+            // existed) falling through to CELL_DEFAULT.
+            val cellDefaults = CellStyle(
+                sizeSp      = obj(cell, "size_sp",       CELL_DEFAULT.sizeSp),
+                labelColor  = objColor(cell, "label_color",   CELL_DEFAULT.labelColor),
+                valueColor  = objColor(cell, "value_color",   CELL_DEFAULT.valueColor),
+                pctPosColor = objColor(cell, "pct_pos_color", CELL_DEFAULT.pctPosColor),
+                pctNegColor = objColor(cell, "pct_neg_color", CELL_DEFAULT.pctNegColor),
+            )
+
+            // Per-cell overrides under `cells.{bn,en,bu,eu}` — each
+            // field falls back to cellDefaults if absent so partial
+            // overrides work cleanly.
+            fun parseCell(key: String): CellStyle {
+                val o = cells?.optJSONObject(key)
+                return CellStyle(
+                    sizeSp      = obj(o, "size_sp",       cellDefaults.sizeSp),
+                    labelColor  = objColor(o, "label_color",   cellDefaults.labelColor),
+                    valueColor  = objColor(o, "value_color",   cellDefaults.valueColor),
+                    pctPosColor = objColor(o, "pct_pos_color", cellDefaults.pctPosColor),
+                    pctNegColor = objColor(o, "pct_neg_color", cellDefaults.pctNegColor),
+                )
             }
 
             return V4Style(
@@ -105,11 +153,10 @@ data class V4Style(
                 dividerSp    = obj(divider, "size_sp", DEFAULT.dividerSp),
                 dividerColor = objColor(divider, "color", DEFAULT.dividerColor),
 
-                cellSp         = obj(cell, "size_sp", DEFAULT.cellSp),
-                cellLabelColor = objColor(cell, "label_color", DEFAULT.cellLabelColor),
-                cellValueColor = objColor(cell, "value_color", DEFAULT.cellValueColor),
-                cellPosColor   = objColor(cell, "pct_pos_color", DEFAULT.cellPosColor),
-                cellNegColor   = objColor(cell, "pct_neg_color", DEFAULT.cellNegColor),
+                cellBN = parseCell("bn"),
+                cellEN = parseCell("en"),
+                cellBU = parseCell("bu"),
+                cellEU = parseCell("eu"),
 
                 setNameSp = obj(setName, "size_sp", DEFAULT.setNameSp),
                 cellGapDp = objInt(cell, "gap_dp",       DEFAULT.cellGapDp),

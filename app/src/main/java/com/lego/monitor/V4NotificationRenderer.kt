@@ -124,13 +124,15 @@ object V4NotificationRenderer {
                 TypedValue.COMPLEX_UNIT_SP, s.dividerSp)
             expanded.setTextColor(divId, s.dividerColor)
         }
-        for (cellId in intArrayOf(
-            R.id.notif_r1_cell_a, R.id.notif_r1_cell_b,
-            R.id.notif_r2_cell_a, R.id.notif_r2_cell_b
-        )) {
-            expanded.setTextViewTextSize(cellId,
-                TypedValue.COMPLEX_UNIT_SP, s.cellSp)
-        }
+        // Per-cell text sizes (B N / E N / B U / E U each tunable).
+        expanded.setTextViewTextSize(R.id.notif_r1_cell_a,
+            TypedValue.COMPLEX_UNIT_SP, s.cellBN.sizeSp)
+        expanded.setTextViewTextSize(R.id.notif_r1_cell_b,
+            TypedValue.COMPLEX_UNIT_SP, s.cellEN.sizeSp)
+        expanded.setTextViewTextSize(R.id.notif_r2_cell_a,
+            TypedValue.COMPLEX_UNIT_SP, s.cellBU.sizeSp)
+        expanded.setTextViewTextSize(R.id.notif_r2_cell_b,
+            TypedValue.COMPLEX_UNIT_SP, s.cellEU.sizeSp)
 
         // Layout gaps via setViewPadding (px). dp → px conversion uses
         // the system display density. setViewPadding works since API 1,
@@ -252,9 +254,12 @@ object V4NotificationRenderer {
         val idCellA  = if (top) R.id.notif_r1_cell_a else R.id.notif_r2_cell_a
         val idCellB  = if (top) R.id.notif_r1_cell_b else R.id.notif_r2_cell_b
 
+        val styleA = if (top) p.style.cellBN else p.style.cellBU
+        val styleB = if (top) p.style.cellEN else p.style.cellEU
+
         rv.setTextViewText(idPrice, priceStr)
-        rv.setTextViewText(idCellA, cellSpannable(labA, valA, p.trueCost, p.style))
-        rv.setTextViewText(idCellB, cellSpannable(labB, valB, p.trueCost, p.style))
+        rv.setTextViewText(idCellA, cellSpannable(labA, valA, p.trueCost, styleA))
+        rv.setTextViewText(idCellB, cellSpannable(labB, valB, p.trueCost, styleB))
     }
 
     /** One cell rendered as a SpannableString:
@@ -264,12 +269,12 @@ object V4NotificationRenderer {
      * per cell. */
     private fun cellSpannable(lab: String, marketVal: Double,
                                 trueCost: Double,
-                                style: V4Style): CharSequence {
+                                cs: CellStyle): CharSequence {
         val sb = SpannableStringBuilder()
 
         // Label "B N:" — colour from style.
         sb.append("$lab: ")
-        sb.setSpan(ForegroundColorSpan(style.cellLabelColor),
+        sb.setSpan(ForegroundColorSpan(cs.labelColor),
             0, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
 
         if (marketVal <= 0) {
@@ -280,19 +285,18 @@ object V4NotificationRenderer {
         // Value "£240" — bold, colour from style.
         val valStart = sb.length
         sb.append("£${marketVal.roundToInt()}")
-        sb.setSpan(ForegroundColorSpan(style.cellValueColor),
+        sb.setSpan(ForegroundColorSpan(cs.valueColor),
             valStart, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
         sb.setSpan(StyleSpan(android.graphics.Typeface.BOLD),
             valStart, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
 
-        // Percentage "+74%" — bold, green when >=0 else red, both colours
-        // from style.
+        // Percentage "+74%" — bold, pos/neg colour from cell style.
         sb.append(" ")
         val pct = ((marketVal - trueCost) / marketVal * 100).roundToInt()
         val sign = if (pct >= 0) "+" else ""
         val pctStart = sb.length
         sb.append("$sign$pct%")
-        val pctColor = if (pct >= 0) style.cellPosColor else style.cellNegColor
+        val pctColor = if (pct >= 0) cs.pctPosColor else cs.pctNegColor
         sb.setSpan(ForegroundColorSpan(pctColor),
             pctStart, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
         sb.setSpan(StyleSpan(android.graphics.Typeface.BOLD),
