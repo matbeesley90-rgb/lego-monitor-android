@@ -65,25 +65,26 @@
             android:id="@+id/notif_r1_price"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textSize="20sp"
+            android:textSize="18sp"
             android:textStyle="bold"
             android:textColor="#3B98E0"
-            android:minWidth="72dp" />
+            android:minWidth="56dp" />
         <TextView
             android:id="@+id/notif_r1_div"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textSize="16sp"
+            android:textSize="14sp"
             android:textColor="#555555"
-            android:paddingStart="10dp"
-            android:paddingEnd="12dp"
+            android:paddingStart="6dp"
+            android:paddingEnd="8dp"
             android:text="│" />
         <TextView
             android:id="@+id/notif_r1_cell_a"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:textSize="13sp"
+            android:textSize="11sp"
+            android:textColor="#FFFFFF"
             android:singleLine="true"
             android:ellipsize="end"
             android:layout_marginEnd="6dp" />
@@ -92,7 +93,8 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:textSize="13sp"
+            android:textSize="11sp"
+            android:textColor="#FFFFFF"
             android:singleLine="true"
             android:ellipsize="end" />
     </LinearLayout>
@@ -108,25 +110,26 @@
             android:id="@+id/notif_r2_price"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textSize="14sp"
+            android:textSize="13sp"
             android:textStyle="bold"
             android:textColor="#F5AF02"
-            android:minWidth="72dp" />
+            android:minWidth="56dp" />
         <TextView
             android:id="@+id/notif_r2_div"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textSize="16sp"
+            android:textSize="14sp"
             android:textColor="#555555"
-            android:paddingStart="10dp"
-            android:paddingEnd="12dp"
+            android:paddingStart="6dp"
+            android:paddingEnd="8dp"
             android:text="│" />
         <TextView
             android:id="@+id/notif_r2_cell_a"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:textSize="13sp"
+            android:textSize="11sp"
+            android:textColor="#FFFFFF"
             android:singleLine="true"
             android:ellipsize="end"
             android:layout_marginEnd="6dp" />
@@ -135,7 +138,8 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:textSize="13sp"
+            android:textSize="11sp"
+            android:textColor="#FFFFFF"
             android:singleLine="true"
             android:ellipsize="end" />
     </LinearLayout>
