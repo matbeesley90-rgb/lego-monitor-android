@@ -16,8 +16,24 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:orientation="vertical"
-    android:padding="12dp">
+    android:orientation="vertical">
+
+    <!-- Tier banner stripe — 6dp full-width coloured bar at the very
+         top of the notification. Visibility GONE for Green deals and
+         auctions; VISIBLE with tier-coloured fill for Yellow / Amber.
+         The colour is set at runtime via setBackgroundColor in the
+         V4NotificationRenderer (TierInfo.bannerColor). -->
+    <View
+        android:id="@+id/notif_banner"
+        android:layout_width="match_parent"
+        android:layout_height="6dp"
+        android:visibility="gone" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="12dp">
 
     <!-- Title row: brand wordmark (image) + " • " + green pct + optional " • 🔨 timer" -->
     <LinearLayout
@@ -143,9 +159,10 @@
             android:ellipsize="end" />
     </LinearLayout>
 
-    <!-- System 2 watchlist footer — hidden for deal/auction. Carries
-         the "Below market — BL+eBay min avg £361" hint that says why
-         the watchlist alert fired. -->
+    <!-- Tier footer (System 3) — hidden for plain Green deals + all
+         auctions. Carries the "🟡 £142 • +69% £58 profit" fig-stack
+         summary for Yellow / Amber tier deals. -->
+
     <TextView
         android:id="@+id/notif_footer"
         android:layout_width="match_parent"
@@ -164,5 +181,7 @@
         android:scaleType="centerCrop"
         android:adjustViewBounds="true"
         android:contentDescription="@null" />
+
+    </LinearLayout>
 
 </LinearLayout>

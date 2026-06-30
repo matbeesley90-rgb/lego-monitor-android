@@ -108,11 +108,22 @@ object V4NotificationRenderer {
         collapsed.setTextViewText(R.id.notif_subtitle, subtitle)
         expanded.setTextViewText(R.id.notif_setname, subtitle)
 
-        // Watchlist footer line — shown only for watchlist kind.
-        if (p.isWatchlist && p.watchlistFooter.isNotBlank()) {
-            expanded.setViewVisibility(R.id.notif_footer, View.VISIBLE)
-            expanded.setTextViewText(R.id.notif_footer, p.watchlistFooter)
+        // Tier banner + footer — present only when the V4 payload
+        // carries a `tier` block (Yellow / Amber). Plain Green deals
+        // and auctions get no banner and no footer.
+        val tier = p.tier
+        if (tier != null) {
+            expanded.setViewVisibility(R.id.notif_banner, View.VISIBLE)
+            expanded.setInt(R.id.notif_banner,
+                "setBackgroundColor", tier.bannerColor)
+            if (tier.footer.isNotBlank()) {
+                expanded.setViewVisibility(R.id.notif_footer, View.VISIBLE)
+                expanded.setTextViewText(R.id.notif_footer, tier.footer)
+            } else {
+                expanded.setViewVisibility(R.id.notif_footer, View.GONE)
+            }
         } else {
+            expanded.setViewVisibility(R.id.notif_banner, View.GONE)
             expanded.setViewVisibility(R.id.notif_footer, View.GONE)
         }
 
@@ -206,9 +217,6 @@ object V4NotificationRenderer {
     private fun brandTitleTailSpannable(p: V4Payload): CharSequence {
         val s = p.style
         val sb = SpannableStringBuilder()
-        // 👁 marker first for watchlist so the eye reads BEFORE the pct
-        // when scanning left→right past the brand wordmark.
-        if (p.isWatchlist) sb.append("👁 ")
         sb.append("• ")
         val pctStart = sb.length
         sb.append("${p.pct}%")

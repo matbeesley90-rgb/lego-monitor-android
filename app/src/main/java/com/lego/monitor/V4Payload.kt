@@ -12,7 +12,7 @@ import org.json.JSONObject
  * behaviour).
  */
 data class V4Payload(
-    val kind: String,           // "deal" | "auction" | "watchlist"
+    val kind: String,           // "deal" | "auction" (watchlist retired)
     val brand: String,          // "ebay" | "vinted" | "facebook"
     val setName: String,
     val setNum: String,
@@ -33,16 +33,10 @@ data class V4Payload(
     // Runtime-tunable styling from the Pi's notification_style_json
     // config; defaults match the baked-in look when absent or partial.
     val style: V4Style = V4Style.DEFAULT,
-    // System 2 (watchlist) only — footer line appended below the grid
-    // explaining why the alert fired (e.g. "Below market — BL+eBay min
-    // avg £361"). Empty string for deal / auction kinds.
-    val watchlistFooter: String = "",
-    // Wire title from the ntfy frame, used verbatim for watchlist
-    // notifications. Deal / auction kinds rebuild the title from the
-    // brand wordmark + RelativeSizeSpan pct instead.
-    val wireTitle: String = "",
+    // Tier metadata (Yellow / Amber). Null when the payload is a plain
+    // Green deal or an auction — neither shows the banner stripe.
+    val tier: TierInfo? = null,
 ) {
-    val isWatchlist: Boolean get() = kind == "watchlist"
     val isAuction: Boolean get() = kind == "auction"
 
     companion object {
@@ -75,13 +69,46 @@ data class V4Payload(
                     minsLeft     = auc?.optInt("mins_left"),
                     endIso       = auc?.optString("end_iso"),
                     style        = V4Style.parse(o.optJSONObject("style")),
-                    watchlistFooter = o.optString("watchlist_footer", ""),
-                    // wireTitle is filled in by the caller from the
-                    // outer ntfy frame (it's not in the payload itself).
+                    tier         = TierInfo.parse(o.optJSONObject("tier")),
                 )
             } catch (_: Exception) {
                 null
             }
+        }
+    }
+}
+
+/**
+ * Tier 3 metadata (System 3) — present in V4 payloads for Yellow /
+ * Amber tier deals. Null on plain Green deals + auctions.
+ *
+ *   name          "yellow" | "amber"
+ *   bannerColor   ARGB int parsed from "#RRGGBB" — runtime-applied
+ *                 to the 6dp notif_banner stripe at the top of the
+ *                 expanded layout.
+ *   footer        Pre-formatted body line (e.g. "🟡 £142 • +69%
+ *                 £58 profit"). Rendered in notif_footer below the
+ *                 grid.
+ */
+data class TierInfo(
+    val name: String,
+    val bannerColor: Int,
+    val footer: String,
+) {
+    companion object {
+        fun parse(o: org.json.JSONObject?): TierInfo? {
+            if (o == null) return null
+            val name = o.optString("name", "")
+            if (name.isBlank()) return null
+            val colorStr = o.optString("banner_color", "")
+            val color = if (colorStr.isBlank()) android.graphics.Color.GRAY
+                        else try { android.graphics.Color.parseColor(colorStr) }
+                             catch (_: Exception) { android.graphics.Color.GRAY }
+            return TierInfo(
+                name        = name,
+                bannerColor = color,
+                footer      = o.optString("footer", ""),
+            )
         }
     }
 }
