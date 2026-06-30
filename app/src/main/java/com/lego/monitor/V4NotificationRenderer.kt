@@ -92,25 +92,19 @@ object V4NotificationRenderer {
         val s = p.style
         val subtitle  = setNameLine(p)
 
-        // Title path forks on kind:
-        //   • watchlist → brand wordmark image + Pi's wire title
-        //     verbatim ("👁 Set Name • £340") — no spans, no pct
-        //     (watchlist alerts don't have a headline %).
-        //   • deal / auction → brand wordmark + RelativeSizeSpan pct.
+        // All kinds share the same title layout: brand wordmark +
+        // RelativeSizeSpan'd headline pct. Watchlist prepends a 👁
+        // marker so Mat can tell at a glance it's from a saved-set
+        // alert vs a generic deal.
         val brandDrawable = brandDrawableFor(p.brand)
         collapsed.setImageViewResource(R.id.notif_brand_logo, brandDrawable)
         expanded.setImageViewResource(R.id.notif_brand_logo, brandDrawable)
         collapsed.setViewVisibility(R.id.notif_brand_logo, View.VISIBLE)
         expanded.setViewVisibility(R.id.notif_brand_logo, View.VISIBLE)
 
-        if (p.isWatchlist) {
-            collapsed.setTextViewText(R.id.notif_title_tail, p.wireTitle)
-            expanded.setTextViewText(R.id.notif_title_tail, p.wireTitle)
-        } else {
-            val titleTail = brandTitleTailSpannable(p)
-            collapsed.setTextViewText(R.id.notif_title_tail, titleTail)
-            expanded.setTextViewText(R.id.notif_title_tail, titleTail)
-        }
+        val titleTail = brandTitleTailSpannable(p)
+        collapsed.setTextViewText(R.id.notif_title_tail, titleTail)
+        expanded.setTextViewText(R.id.notif_title_tail, titleTail)
         collapsed.setTextViewText(R.id.notif_subtitle, subtitle)
         expanded.setTextViewText(R.id.notif_setname, subtitle)
 
@@ -212,6 +206,9 @@ object V4NotificationRenderer {
     private fun brandTitleTailSpannable(p: V4Payload): CharSequence {
         val s = p.style
         val sb = SpannableStringBuilder()
+        // 👁 marker first for watchlist so the eye reads BEFORE the pct
+        // when scanning left→right past the brand wordmark.
+        if (p.isWatchlist) sb.append("👁 ")
         sb.append("• ")
         val pctStart = sb.length
         sb.append("${p.pct}%")
