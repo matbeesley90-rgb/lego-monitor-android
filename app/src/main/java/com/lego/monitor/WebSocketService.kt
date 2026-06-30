@@ -138,7 +138,10 @@ class WebSocketService : Service() {
             // Phase 1 stock notification path so a plain-text test
             // (e.g. curl -d "hello") still shows something useful.
             val msgBody = obj.optString("message")
-            val v4 = V4Payload.tryParse(msgBody)
+            val v4Raw = V4Payload.tryParse(msgBody)
+            // Carry the outer ntfy frame's title into the payload — the
+            // watchlist render path uses it verbatim.
+            val v4 = v4Raw?.copy(wireTitle = obj.optString("title"))
             Log.d(TAG, "WS routing: v4_parsed=${v4 != null}  body_starts='${msgBody.take(60)}'")
             if (v4 != null) {
                 V4NotificationRenderer.show(applicationContext, obj, v4)

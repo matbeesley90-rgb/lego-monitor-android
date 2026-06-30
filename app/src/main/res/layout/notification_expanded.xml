@@ -143,6 +143,19 @@
             android:ellipsize="end" />
     </LinearLayout>
 
+    <!-- System 2 watchlist footer — hidden for deal/auction. Carries
+         the "Below market — BL+eBay min avg £361" hint that says why
+         the watchlist alert fired. -->
+    <TextView
+        android:id="@+id/notif_footer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:textSize="12sp"
+        android:textColor="#9AA0A6"
+        android:textStyle="italic"
+        android:visibility="gone" />
+
     <ImageView
         android:id="@+id/notif_thumb"
         android:layout_width="match_parent"

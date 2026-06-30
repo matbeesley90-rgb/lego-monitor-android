@@ -33,7 +33,16 @@ data class V4Payload(
     // Runtime-tunable styling from the Pi's notification_style_json
     // config; defaults match the baked-in look when absent or partial.
     val style: V4Style = V4Style.DEFAULT,
+    // System 2 (watchlist) only — footer line appended below the grid
+    // explaining why the alert fired (e.g. "Below market — BL+eBay min
+    // avg £361"). Empty string for deal / auction kinds.
+    val watchlistFooter: String = "",
+    // Wire title from the ntfy frame, used verbatim for watchlist
+    // notifications. Deal / auction kinds rebuild the title from the
+    // brand wordmark + RelativeSizeSpan pct instead.
+    val wireTitle: String = "",
 ) {
+    val isWatchlist: Boolean get() = kind == "watchlist"
     val isAuction: Boolean get() = kind == "auction"
 
     companion object {
@@ -66,6 +75,9 @@ data class V4Payload(
                     minsLeft     = auc?.optInt("mins_left"),
                     endIso       = auc?.optString("end_iso"),
                     style        = V4Style.parse(o.optJSONObject("style")),
+                    watchlistFooter = o.optString("watchlist_footer", ""),
+                    // wireTitle is filled in by the caller from the
+                    // outer ntfy frame (it's not in the payload itself).
                 )
             } catch (_: Exception) {
                 null

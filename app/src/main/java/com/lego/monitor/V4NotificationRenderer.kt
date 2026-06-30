@@ -16,6 +16,7 @@ import android.text.style.RelativeSizeSpan
 import android.text.style.StyleSpan
 import android.util.Log
 import android.util.TypedValue
+import android.view.View
 import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
 import java.net.URL
@@ -89,20 +90,38 @@ object V4NotificationRenderer {
         val expanded  = RemoteViews(ctx.packageName, R.layout.notification_expanded)
 
         val s = p.style
-        val brandDrawable = brandDrawableFor(p.brand)
-        val titleTail = brandTitleTailSpannable(p)
         val subtitle  = setNameLine(p)
 
-        // Collapsed (heads-up + lock-screen) — single-line layout with
-        // thumb on the left + brand wordmark + pct.
-        collapsed.setImageViewResource(R.id.notif_brand_logo, brandDrawable)
-        collapsed.setTextViewText(R.id.notif_title_tail, titleTail)
+        // Title path forks on kind:
+        //   • watchlist → use the Pi's wire title verbatim ("👁 eBay •
+        //     Set Name • £340"); hide the brand wordmark since the
+        //     platform name is already in the title.
+        //   • deal / auction → brand wordmark + RelativeSizeSpan pct.
+        if (p.isWatchlist) {
+            collapsed.setViewVisibility(R.id.notif_brand_logo, View.GONE)
+            expanded.setViewVisibility(R.id.notif_brand_logo, View.GONE)
+            collapsed.setTextViewText(R.id.notif_title_tail, p.wireTitle)
+            expanded.setTextViewText(R.id.notif_title_tail, p.wireTitle)
+        } else {
+            val brandDrawable = brandDrawableFor(p.brand)
+            val titleTail = brandTitleTailSpannable(p)
+            collapsed.setViewVisibility(R.id.notif_brand_logo, View.VISIBLE)
+            expanded.setViewVisibility(R.id.notif_brand_logo, View.VISIBLE)
+            collapsed.setImageViewResource(R.id.notif_brand_logo, brandDrawable)
+            expanded.setImageViewResource(R.id.notif_brand_logo, brandDrawable)
+            collapsed.setTextViewText(R.id.notif_title_tail, titleTail)
+            expanded.setTextViewText(R.id.notif_title_tail, titleTail)
+        }
         collapsed.setTextViewText(R.id.notif_subtitle, subtitle)
-
-        // Expanded — text gets full width, image goes at the bottom.
-        expanded.setImageViewResource(R.id.notif_brand_logo, brandDrawable)
-        expanded.setTextViewText(R.id.notif_title_tail, titleTail)
         expanded.setTextViewText(R.id.notif_setname, subtitle)
+
+        // Watchlist footer line — shown only for watchlist kind.
+        if (p.isWatchlist && p.watchlistFooter.isNotBlank()) {
+            expanded.setViewVisibility(R.id.notif_footer, View.VISIBLE)
+            expanded.setTextViewText(R.id.notif_footer, p.watchlistFooter)
+        } else {
+            expanded.setViewVisibility(R.id.notif_footer, View.GONE)
+        }
 
         // Apply runtime-tunable sizes (from V4Style) to every text view
         // that doesn't already get its size from a Spannable. Spans
