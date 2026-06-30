@@ -132,6 +132,19 @@ object V4NotificationRenderer {
                 TypedValue.COMPLEX_UNIT_SP, s.cellSp)
         }
 
+        // Layout gaps via setViewPadding (px). dp → px conversion uses
+        // the system display density. setViewPadding works since API 1,
+        // unlike setViewLayoutMargin which needs API 31.
+        val density = ctx.resources.displayMetrics.density
+        val cellGapPx = (s.cellGapDp * density).toInt()
+        val rowGapPx  = (s.rowGapDp  * density).toInt()
+        // Right padding on cell_a creates the horizontal gap before cell_b.
+        for (cellAId in intArrayOf(R.id.notif_r1_cell_a, R.id.notif_r2_cell_a)) {
+            expanded.setViewPadding(cellAId, 0, 0, cellGapPx, 0)
+        }
+        // Top padding on row 2's container creates the vertical gap.
+        expanded.setViewPadding(R.id.notif_row2, 0, rowGapPx, 0, 0)
+
         // Collapsed gets the same title scale.
         collapsed.setTextViewTextSize(R.id.notif_title_tail,
             TypedValue.COMPLEX_UNIT_SP, s.titleBaseSp)

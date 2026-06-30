@@ -86,8 +86,7 @@
             android:textSize="11sp"
             android:textColor="#FFFFFF"
             android:singleLine="true"
-            android:ellipsize="end"
-            android:layout_marginEnd="6dp" />
+            android:ellipsize="end" />
         <TextView
             android:id="@+id/notif_r1_cell_b"
             android:layout_width="0dp"
@@ -99,12 +98,13 @@
             android:ellipsize="end" />
     </LinearLayout>
 
-    <!-- Grid row 2: Used prices -->
+    <!-- Grid row 2: Used prices — id'd so V4Style.rowGapDp can set
+         the top padding at runtime via setViewPadding -->
     <LinearLayout
+        android:id="@+id/notif_row2"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:layout_marginTop="2dp"
         android:gravity="center_vertical">
         <TextView
             android:id="@+id/notif_r2_price"
@@ -131,8 +131,7 @@
             android:textSize="11sp"
             android:textColor="#FFFFFF"
             android:singleLine="true"
-            android:ellipsize="end"
-            android:layout_marginEnd="6dp" />
+            android:ellipsize="end" />
         <TextView
             android:id="@+id/notif_r2_cell_b"
             android:layout_width="0dp"

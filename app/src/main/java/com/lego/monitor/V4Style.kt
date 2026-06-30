@@ -35,6 +35,8 @@ data class V4Style(
     val cellNegColor: Int,
 
     val setNameSp: Float,
+    val cellGapDp: Int,      // horizontal gap between cell_a and cell_b
+    val rowGapDp: Int,       // vertical gap between grid row 1 and row 2
 ) {
     companion object Defaults {
         // Defaults intentionally match the current baked-in layout
@@ -61,6 +63,8 @@ data class V4Style(
             cellNegColor   = Color.parseColor("#EF4444"),
 
             setNameSp = 13f,
+            cellGapDp = 6,
+            rowGapDp  = 2,
         )
 
         /** Read a `style` block from the V4 payload JSON. Any missing
@@ -108,6 +112,8 @@ data class V4Style(
                 cellNegColor   = objColor(cell, "pct_neg_color", DEFAULT.cellNegColor),
 
                 setNameSp = obj(setName, "size_sp", DEFAULT.setNameSp),
+                cellGapDp = objInt(cell, "gap_dp",       DEFAULT.cellGapDp),
+                rowGapDp  = objInt(root.optJSONObject("row"), "gap_dp", DEFAULT.rowGapDp),
             )
         }
     }
