@@ -16,24 +16,24 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:orientation="vertical">
+    android:orientation="vertical"
+    android:padding="12dp">
 
-    <!-- Tier banner stripe — 6dp full-width coloured bar at the very
-         top of the notification. Visibility GONE for Green deals and
-         auctions; VISIBLE with tier-coloured fill for Yellow / Amber.
-         The colour is set at runtime via setBackgroundColor in the
-         V4NotificationRenderer (TierInfo.bannerColor). -->
-    <View
+    <!-- Tier banner stripe — 6dp full-width coloured bar at the top
+         of the notification body. Visibility GONE for Green deals
+         and auctions; VISIBLE with tier-coloured fill for Yellow /
+         Amber. Set via setBackgroundColor in V4NotificationRenderer.
+         Uses ImageView (not bare View) — Samsung's notification
+         compositor sometimes rejects bare <View> elements in
+         RemoteViews. ImageView is rock-solid. -->
+    <ImageView
         android:id="@+id/notif_banner"
         android:layout_width="match_parent"
         android:layout_height="6dp"
+        android:layout_marginBottom="8dp"
+        android:scaleType="fitXY"
+        android:contentDescription="@null"
         android:visibility="gone" />
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="12dp">
 
     <!-- Title row: brand wordmark (image) + " • " + green pct + optional " • 🔨 timer" -->
     <LinearLayout
@@ -181,7 +181,5 @@
         android:scaleType="centerCrop"
         android:adjustViewBounds="true"
         android:contentDescription="@null" />
-
-    </LinearLayout>
 
 </LinearLayout>
