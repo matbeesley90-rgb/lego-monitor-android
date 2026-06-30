@@ -12,6 +12,7 @@ import android.os.Build
 import android.text.SpannableStringBuilder
 import android.text.Spanned
 import android.text.style.ForegroundColorSpan
+import android.text.style.RelativeSizeSpan
 import android.text.style.StyleSpan
 import android.util.Log
 import android.widget.RemoteViews
@@ -147,8 +148,14 @@ object V4NotificationRenderer {
         sb.append("• ")
         val pctStart = sb.length
         sb.append("${p.pct}%")
+        val pctEnd = sb.length
+        // The pct is the headline number — make it ~1.6× the base
+        // textSize via RelativeSizeSpan so it stands out without
+        // bloating the bullet or the timer alongside it.
+        sb.setSpan(RelativeSizeSpan(1.6f),
+            pctStart, pctEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
         sb.setSpan(ForegroundColorSpan(Color.parseColor("#1F9D55")),
-            pctStart, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            pctStart, pctEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
         if (p.isAuction && p.minsLeft != null) {
             // Hammer emoji intentionally removed — the brand wordmark
             // already conveys "this is from eBay auctions" and the

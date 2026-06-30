@@ -32,7 +32,7 @@
         <ImageView
             android:id="@+id/notif_brand_logo"
             android:layout_width="wrap_content"
-            android:layout_height="22dp"
+            android:layout_height="18dp"
             android:adjustViewBounds="true"
             android:contentDescription="@null" />
 
@@ -41,8 +41,8 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:layout_marginStart="8dp"
-            android:textSize="17sp"
+            android:layout_marginStart="6dp"
+            android:textSize="13sp"
             android:textStyle="bold"
             android:singleLine="true"
             android:ellipsize="end" />
