@@ -150,7 +150,10 @@ object V4NotificationRenderer {
         sb.setSpan(ForegroundColorSpan(Color.parseColor("#1F9D55")),
             pctStart, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
         if (p.isAuction && p.minsLeft != null) {
-            sb.append(" • 🔨 ${p.minsLeft}m")
+            // Hammer emoji intentionally removed — the brand wordmark
+            // already conveys "this is from eBay auctions" and the
+            // timer reads cleanly without the icon.
+            sb.append(" • ${p.minsLeft}m")
         }
         return sb
     }
