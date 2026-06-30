@@ -15,6 +15,7 @@ import android.text.style.ForegroundColorSpan
 import android.text.style.RelativeSizeSpan
 import android.text.style.StyleSpan
 import android.util.Log
+import android.util.TypedValue
 import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
 import java.net.URL
@@ -87,6 +88,7 @@ object V4NotificationRenderer {
         val collapsed = RemoteViews(ctx.packageName, R.layout.notification_collapsed)
         val expanded  = RemoteViews(ctx.packageName, R.layout.notification_expanded)
 
+        val s = p.style
         val brandDrawable = brandDrawableFor(p.brand)
         val titleTail = brandTitleTailSpannable(p)
         val subtitle  = setNameLine(p)
@@ -98,11 +100,42 @@ object V4NotificationRenderer {
         collapsed.setTextViewText(R.id.notif_subtitle, subtitle)
 
         // Expanded — text gets full width, image goes at the bottom.
-        // Each grid row is 4 separate cells so they can't wrap into
-        // each other regardless of length.
         expanded.setImageViewResource(R.id.notif_brand_logo, brandDrawable)
         expanded.setTextViewText(R.id.notif_title_tail, titleTail)
         expanded.setTextViewText(R.id.notif_setname, subtitle)
+
+        // Apply runtime-tunable sizes (from V4Style) to every text view
+        // that doesn't already get its size from a Spannable. Spans
+        // (pct, timer, cell value/pct) inherit from their TextView's
+        // base size — so setting the base size here scales everything
+        // proportionally.
+        expanded.setTextViewTextSize(R.id.notif_title_tail,
+            TypedValue.COMPLEX_UNIT_SP, s.titleBaseSp)
+        expanded.setTextViewTextSize(R.id.notif_setname,
+            TypedValue.COMPLEX_UNIT_SP, s.setNameSp)
+        expanded.setTextViewTextSize(R.id.notif_r1_price,
+            TypedValue.COMPLEX_UNIT_SP, s.askingSp)
+        expanded.setTextColor(R.id.notif_r1_price, s.askingColor)
+        expanded.setTextViewTextSize(R.id.notif_r2_price,
+            TypedValue.COMPLEX_UNIT_SP, s.trueCostSp)
+        expanded.setTextColor(R.id.notif_r2_price, s.trueCostColor)
+        for (divId in intArrayOf(R.id.notif_r1_div, R.id.notif_r2_div)) {
+            expanded.setTextViewTextSize(divId,
+                TypedValue.COMPLEX_UNIT_SP, s.dividerSp)
+            expanded.setTextColor(divId, s.dividerColor)
+        }
+        for (cellId in intArrayOf(
+            R.id.notif_r1_cell_a, R.id.notif_r1_cell_b,
+            R.id.notif_r2_cell_a, R.id.notif_r2_cell_b
+        )) {
+            expanded.setTextViewTextSize(cellId,
+                TypedValue.COMPLEX_UNIT_SP, s.cellSp)
+        }
+
+        // Collapsed gets the same title scale.
+        collapsed.setTextViewTextSize(R.id.notif_title_tail,
+            TypedValue.COMPLEX_UNIT_SP, s.titleBaseSp)
+
         fillGridRow(expanded, p, top = true)
         fillGridRow(expanded, p, top = false)
 
@@ -144,23 +177,29 @@ object V4NotificationRenderer {
      * The percentage span is coloured green so it matches the V4
      * design ("green % next to ebay/vinted/facebook"). */
     private fun brandTitleTailSpannable(p: V4Payload): CharSequence {
+        val s = p.style
         val sb = SpannableStringBuilder()
         sb.append("• ")
         val pctStart = sb.length
         sb.append("${p.pct}%")
         val pctEnd = sb.length
-        // The pct is the headline number — make it ~1.6× the base
-        // textSize via RelativeSizeSpan so it stands out without
-        // bloating the bullet or the timer alongside it.
-        sb.setSpan(RelativeSizeSpan(1.6f),
+        // Headline pct: RelativeSizeSpan scales it above the base, colour
+        // from style.
+        sb.setSpan(RelativeSizeSpan(s.titlePctScale),
             pctStart, pctEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-        sb.setSpan(ForegroundColorSpan(Color.parseColor("#1F9D55")),
+        sb.setSpan(ForegroundColorSpan(s.titlePctColor),
             pctStart, pctEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
         if (p.isAuction && p.minsLeft != null) {
             // Hammer emoji intentionally removed — the brand wordmark
             // already conveys "this is from eBay auctions" and the
             // timer reads cleanly without the icon.
+            val timerStart = sb.length
             sb.append(" • ${p.minsLeft}m")
+            if (s.titleTimerScale != 1.0f) {
+                sb.setSpan(RelativeSizeSpan(s.titleTimerScale),
+                    timerStart, sb.length,
+                    Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            }
         }
         return sb
     }
@@ -189,11 +228,8 @@ object V4NotificationRenderer {
      * value and true cost (green ≥0, red <0). */
     private fun fillGridRow(rv: RemoteViews, p: V4Payload, top: Boolean) {
         val priceStr = if (top) {
-            // Asking — big blue, no decimals (matches the design).
             "£${p.asking.roundToInt()}"
         } else {
-            // True cost — smaller amber, with decimals so the fees+
-            // postage maths is visible at a glance.
             "£%.2f".format(p.trueCost)
         }
         val (labA, valA) = if (top) "B N" to p.blNew else "B U" to p.blUsed
@@ -204,8 +240,8 @@ object V4NotificationRenderer {
         val idCellB  = if (top) R.id.notif_r1_cell_b else R.id.notif_r2_cell_b
 
         rv.setTextViewText(idPrice, priceStr)
-        rv.setTextViewText(idCellA, cellSpannable(labA, valA, p.trueCost))
-        rv.setTextViewText(idCellB, cellSpannable(labB, valB, p.trueCost))
+        rv.setTextViewText(idCellA, cellSpannable(labA, valA, p.trueCost, p.style))
+        rv.setTextViewText(idCellB, cellSpannable(labB, valB, p.trueCost, p.style))
     }
 
     /** One cell rendered as a SpannableString:
@@ -214,12 +250,13 @@ object V4NotificationRenderer {
      * matches the listing-card design without needing 3 TextViews
      * per cell. */
     private fun cellSpannable(lab: String, marketVal: Double,
-                                trueCost: Double): CharSequence {
+                                trueCost: Double,
+                                style: V4Style): CharSequence {
         val sb = SpannableStringBuilder()
 
-        // Label "B N:" in muted grey.
+        // Label "B N:" — colour from style.
         sb.append("$lab: ")
-        sb.setSpan(ForegroundColorSpan(Color.parseColor("#9AA0A6")),
+        sb.setSpan(ForegroundColorSpan(style.cellLabelColor),
             0, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
 
         if (marketVal <= 0) {
@@ -227,22 +264,22 @@ object V4NotificationRenderer {
             return sb
         }
 
-        // Value "£240" in bold white.
+        // Value "£240" — bold, colour from style.
         val valStart = sb.length
         sb.append("£${marketVal.roundToInt()}")
-        sb.setSpan(ForegroundColorSpan(Color.WHITE),
+        sb.setSpan(ForegroundColorSpan(style.cellValueColor),
             valStart, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
         sb.setSpan(StyleSpan(android.graphics.Typeface.BOLD),
             valStart, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
 
-        // Percentage "+74%" in green / red.
+        // Percentage "+74%" — bold, green when >=0 else red, both colours
+        // from style.
         sb.append(" ")
         val pct = ((marketVal - trueCost) / marketVal * 100).roundToInt()
         val sign = if (pct >= 0) "+" else ""
         val pctStart = sb.length
         sb.append("$sign$pct%")
-        val pctColor = if (pct >= 0) Color.parseColor("#22C55E")
-                       else           Color.parseColor("#EF4444")
+        val pctColor = if (pct >= 0) style.cellPosColor else style.cellNegColor
         sb.setSpan(ForegroundColorSpan(pctColor),
             pctStart, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
         sb.setSpan(StyleSpan(android.graphics.Typeface.BOLD),

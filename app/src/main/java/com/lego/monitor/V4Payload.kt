@@ -30,6 +30,9 @@ data class V4Payload(
     // Auction-only — null for buy-now deals
     val minsLeft: Int? = null,
     val endIso: String? = null,
+    // Runtime-tunable styling from the Pi's notification_style_json
+    // config; defaults match the baked-in look when absent or partial.
+    val style: V4Style = V4Style.DEFAULT,
 ) {
     val isAuction: Boolean get() = kind == "auction"
 
@@ -62,6 +65,7 @@ data class V4Payload(
                     catalogueUrl = o.optString("catalogue_url", ""),
                     minsLeft     = auc?.optInt("mins_left"),
                     endIso       = auc?.optString("end_iso"),
+                    style        = V4Style.parse(o.optJSONObject("style")),
                 )
             } catch (_: Exception) {
                 null
