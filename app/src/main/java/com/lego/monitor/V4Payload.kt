@@ -103,6 +103,7 @@ data class TierInfo(
     val name: String,
     val bannerColor: Int,
     val footer: String,
+    val footerParts: FooterParts?,   // preferred over `footer` when present
 ) {
     companion object {
         fun parse(o: org.json.JSONObject?): TierInfo? {
@@ -117,7 +118,36 @@ data class TierInfo(
                 name        = name,
                 bannerColor = color,
                 footer      = o.optString("footer", ""),
+                footerParts = FooterParts.parse(o.optJSONObject("footer_parts")),
             )
+        }
+    }
+}
+
+/**
+ * Split-out numeric segments for the Yellow/Amber footer line so the
+ * renderer can colour them independently (fig_sum in asking-blue,
+ * pct + profit in positive-green, everything else muted grey).
+ */
+data class FooterParts(
+    val icon: String,
+    val figSum: String,
+    val pct: String,
+    val profit: String,
+    val profitWord: String,
+) {
+    companion object {
+        fun parse(o: org.json.JSONObject?): FooterParts? {
+            if (o == null) return null
+            val icon = o.optString("icon", "")
+            val figSum = o.optString("fig_sum", "")
+            val pct = o.optString("pct", "")
+            val profit = o.optString("profit", "")
+            val word = o.optString("profit_word", "")
+            // If any of the numeric parts is missing, treat the whole
+            // block as absent — caller falls back to the flat text.
+            if (figSum.isBlank() || pct.isBlank() || profit.isBlank()) return null
+            return FooterParts(icon, figSum, pct, profit, word)
         }
     }
 }

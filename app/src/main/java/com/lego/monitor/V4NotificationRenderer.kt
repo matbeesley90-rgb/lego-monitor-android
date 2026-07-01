@@ -125,7 +125,17 @@ object V4NotificationRenderer {
             expanded.setViewVisibility(R.id.notif_banner, View.VISIBLE)
             expanded.setInt(R.id.notif_banner,
                 "setBackgroundColor", tier.bannerColor)
-            if (tier.footer.isNotBlank()) {
+            val footerParts = tier.footerParts
+            if (footerParts != null) {
+                // Multi-colour render: fig_sum in asking-blue, pct +
+                // profit in positive-green, icon + separators + word
+                // muted grey. Colours pulled from the same V4Style
+                // block the price grid uses, so a tweak in the
+                // Settings panel propagates.
+                expanded.setViewVisibility(R.id.notif_footer, View.VISIBLE)
+                expanded.setTextViewText(R.id.notif_footer,
+                    tierFooterSpannable(footerParts, s))
+            } else if (tier.footer.isNotBlank()) {
                 expanded.setViewVisibility(R.id.notif_footer, View.VISIBLE)
                 expanded.setTextViewText(R.id.notif_footer, tier.footer)
             } else {
@@ -284,6 +294,62 @@ object V4NotificationRenderer {
         rv.setTextViewText(idPrice, priceStr)
         rv.setTextViewText(idCellA, cellSpannable(labA, valA, p.trueCost, styleA))
         rv.setTextViewText(idCellB, cellSpannable(labB, valB, p.trueCost, styleB))
+    }
+
+    /** Yellow / Amber tier footer rendered as a SpannableString:
+     *   [grey]{icon}[/] [blue]{fig_sum}[/] [grey] • [/] [green bold]{pct} {profit}[/] [grey] {profit_word}[/]
+     * Blue matches the asking-price colour (top-left of the price
+     * grid) and green matches the positive-% colour (per-cell +N%),
+     * both pulled from V4Style so they track any Settings-panel
+     * tweak. */
+    private fun tierFooterSpannable(parts: FooterParts, s: V4Style): CharSequence {
+        val greyColor = Color.parseColor("#9AA0A6")
+        val blueColor = s.askingColor
+        // The four per-cell CellStyles all default to the same green,
+        // and users tweaking one cell's green rarely leave the others
+        // out of sync — take BN's positive-% colour as the canonical.
+        val greenColor = s.cellBN.pctPosColor
+
+        val sb = SpannableStringBuilder()
+
+        // Icon (grey)
+        val iconStart = sb.length
+        sb.append(parts.icon).append(" ")
+        sb.setSpan(ForegroundColorSpan(greyColor),
+            iconStart, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+
+        // Fig sum (blue, bold)
+        val figStart = sb.length
+        sb.append(parts.figSum)
+        sb.setSpan(ForegroundColorSpan(blueColor),
+            figStart, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        sb.setSpan(StyleSpan(android.graphics.Typeface.BOLD),
+            figStart, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+
+        // Separator (grey)
+        val sepStart = sb.length
+        sb.append(" • ")
+        sb.setSpan(ForegroundColorSpan(greyColor),
+            sepStart, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+
+        // Pct + profit £ (green, bold) — kept together so a single
+        // green run reads as one continuous number-group.
+        val greenStart = sb.length
+        sb.append(parts.pct).append(" ").append(parts.profit)
+        sb.setSpan(ForegroundColorSpan(greenColor),
+            greenStart, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        sb.setSpan(StyleSpan(android.graphics.Typeface.BOLD),
+            greenStart, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+
+        // Trailing " profit" word (grey)
+        if (parts.profitWord.isNotBlank()) {
+            val wordStart = sb.length
+            sb.append(" ").append(parts.profitWord)
+            sb.setSpan(ForegroundColorSpan(greyColor),
+                wordStart, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        }
+
+        return sb
     }
 
     /** One cell rendered as a SpannableString:
