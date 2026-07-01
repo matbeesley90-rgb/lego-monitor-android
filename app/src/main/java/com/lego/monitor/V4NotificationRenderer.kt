@@ -128,9 +128,21 @@ object V4NotificationRenderer {
             expanded.setViewVisibility(R.id.notif_banner, View.VISIBLE)
             expanded.setInt(R.id.notif_banner,
                 "setBackgroundColor", tier.bannerColor)
-            collapsed.setViewVisibility(R.id.notif_collapsed_stripe, View.VISIBLE)
-            collapsed.setInt(R.id.notif_collapsed_stripe,
-                "setBackgroundColor", tier.bannerColor)
+            // Collapsed stripe: TOP for yellow, LEFT for amber. Two
+            // dimensions (position + colour) differentiate the tiers
+            // faster than colour alone against Samsung's warm
+            // notification background.
+            if (tier.name == "yellow") {
+                collapsed.setViewVisibility(R.id.notif_collapsed_top_stripe, View.VISIBLE)
+                collapsed.setInt(R.id.notif_collapsed_top_stripe,
+                    "setBackgroundColor", tier.bannerColor)
+                collapsed.setViewVisibility(R.id.notif_collapsed_stripe, View.GONE)
+            } else {
+                collapsed.setViewVisibility(R.id.notif_collapsed_stripe, View.VISIBLE)
+                collapsed.setInt(R.id.notif_collapsed_stripe,
+                    "setBackgroundColor", tier.bannerColor)
+                collapsed.setViewVisibility(R.id.notif_collapsed_top_stripe, View.GONE)
+            }
             val footerParts = tier.footerParts
             if (footerParts != null) {
                 // Multi-colour render: fig_sum in asking-blue, pct +
@@ -151,6 +163,7 @@ object V4NotificationRenderer {
             expanded.setViewVisibility(R.id.notif_banner, View.GONE)
             expanded.setViewVisibility(R.id.notif_footer, View.GONE)
             collapsed.setViewVisibility(R.id.notif_collapsed_stripe, View.GONE)
+            collapsed.setViewVisibility(R.id.notif_collapsed_top_stripe, View.GONE)
         }
 
         // Apply runtime-tunable sizes (from V4Style) to every text view

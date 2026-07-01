@@ -1,26 +1,42 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Collapsed (heads-up / lock-screen) layout. One-line summary:
-  [stripe][thumbnail]  Vinted • 56%  TIE Fighter Pilot Helmet · 75274
+  Collapsed (heads-up / lock-screen) layout.
 
-  Root is a horizontal LinearLayout with the tier stripe as the very
-  first child so it can sit flush at the start edge; the RelativeLayout
-  wrapper for the existing thumb/title/subtitle stack lives beside it
-  with weight=1. Earlier version used a padded RelativeLayout root
-  with the stripe positioned at layout_marginStart="-4dp" — but
-  clipToPadding=true (RelativeLayout default) hid the stripe entirely.
-  Restructuring to LinearLayout root is the reliable pattern.
+  Tier stripes for at-a-glance differentiation:
+    Yellow tier → 4dp coloured stripe across the TOP
+    Amber tier  → 4dp coloured stripe down the LEFT edge
+    Green / Fig / auction → no stripe
+  Position (top vs left) + colour (yellow vs amber) together give
+  fast visual differentiation that colour alone doesn't at a glance,
+  especially on Samsung One UI's warm-tinted notification background.
+
+  Root is a vertical LinearLayout so the top stripe can sit above
+  everything else. Beneath it, a horizontal LinearLayout holds the
+  left-edge stripe (Amber) and the existing thumb/title stack.
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="64dp"
-    android:orientation="horizontal"
+    android:orientation="vertical"
     android:background="@android:color/transparent">
 
-    <!-- Left-edge tier stripe — 4dp wide, full-height coloured bar.
-         GONE for Green / Fig / auction; VISIBLE with tier-coloured
-         fill for Yellow / Amber. ImageView (not <View>) — Samsung's
+    <!-- Yellow tier: TOP stripe. ImageView (not <View>) — Samsung's
          RemoteViews compositor sometimes drops bare Views. -->
+    <ImageView
+        android:id="@+id/notif_collapsed_top_stripe"
+        android:layout_width="match_parent"
+        android:layout_height="4dp"
+        android:scaleType="fitXY"
+        android:contentDescription="@null"
+        android:visibility="gone" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="horizontal">
+
+    <!-- Amber tier: LEFT-edge stripe. -->
     <ImageView
         android:id="@+id/notif_collapsed_stripe"
         android:layout_width="4dp"
@@ -85,5 +101,7 @@
         android:ellipsize="end" />
 
     </RelativeLayout>
+
+    </LinearLayout>
 
 </LinearLayout>
