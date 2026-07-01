@@ -33,7 +33,7 @@ object NotificationRenderer {
         val notifId = msgId.hashCode()
 
         val builder = NotificationCompat.Builder(ctx, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_dialog_email)
+            .setSmallIcon(R.drawable.ic_notification_brick)
             .setContentTitle(if (title.isNotBlank()) title else "LEGO deal")
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))

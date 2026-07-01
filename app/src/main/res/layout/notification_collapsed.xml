@@ -10,6 +10,22 @@
     android:padding="8dp"
     android:background="@android:color/transparent">
 
+    <!-- Left-edge tier stripe — 4dp wide, full-height coloured bar
+         anchored to the parent's start edge (outside the content
+         padding). Visibility GONE for Green / Fig / auction; VISIBLE
+         with tier-coloured fill for Yellow / Amber. Uses ImageView
+         (not bare <View>) to match the expanded banner — Samsung's
+         RemoteViews compositor silently drops bare <View> elements. -->
+    <ImageView
+        android:id="@+id/notif_collapsed_stripe"
+        android:layout_width="4dp"
+        android:layout_height="match_parent"
+        android:layout_alignParentStart="true"
+        android:layout_marginStart="-4dp"
+        android:scaleType="fitXY"
+        android:contentDescription="@null"
+        android:visibility="gone" />
+
     <ImageView
         android:id="@+id/notif_thumb"
         android:layout_width="48dp"

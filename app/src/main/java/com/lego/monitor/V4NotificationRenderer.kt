@@ -119,11 +119,17 @@ object V4NotificationRenderer {
 
         // Tier banner + footer — present only when the V4 payload
         // carries a `tier` block (Yellow / Amber). Plain Green deals
-        // and auctions get no banner and no footer.
+        // and auctions get no banner, no stripe, no footer.
         val tier = p.tier
         if (tier != null) {
+            // Top-of-expanded banner + left-edge collapsed stripe are
+            // driven from the SAME tier.bannerColor so the two surfaces
+            // stay in sync.
             expanded.setViewVisibility(R.id.notif_banner, View.VISIBLE)
             expanded.setInt(R.id.notif_banner,
+                "setBackgroundColor", tier.bannerColor)
+            collapsed.setViewVisibility(R.id.notif_collapsed_stripe, View.VISIBLE)
+            collapsed.setInt(R.id.notif_collapsed_stripe,
                 "setBackgroundColor", tier.bannerColor)
             val footerParts = tier.footerParts
             if (footerParts != null) {
@@ -144,6 +150,7 @@ object V4NotificationRenderer {
         } else {
             expanded.setViewVisibility(R.id.notif_banner, View.GONE)
             expanded.setViewVisibility(R.id.notif_footer, View.GONE)
+            collapsed.setViewVisibility(R.id.notif_collapsed_stripe, View.GONE)
         }
 
         // Apply runtime-tunable sizes (from V4Style) to every text view
@@ -209,8 +216,22 @@ object V4NotificationRenderer {
                 "setBackgroundColor", Color.parseColor("#222222"))
         }
 
+        // Per-tier accent — Samsung tints the smallIcon with this
+        // colour in the stacked/grouped tray view (where our custom
+        // RemoteViews are ignored). Green / Fig / auction default to
+        // brand blue; Yellow / Amber pull the tier colour so a
+        // multi-notification stack shows a coloured icon in the row
+        // that matters. Also tints the small-icon on heads-up + lock
+        // screen — consistent tier cue across every surface.
+        val accent = when (tier?.name) {
+            "yellow" -> tier.bannerColor
+            "amber"  -> tier.bannerColor
+            else     -> Color.parseColor("#3B98E0")  // brand blue
+        }
+
         val builder = NotificationCompat.Builder(ctx, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_dialog_email)
+            .setSmallIcon(R.drawable.ic_notification_brick)
+            .setColor(accent)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .setCustomContentView(collapsed)
