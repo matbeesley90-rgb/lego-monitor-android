@@ -90,7 +90,6 @@ object V4NotificationRenderer {
         val expanded  = RemoteViews(ctx.packageName, R.layout.notification_expanded)
 
         val s = p.style
-        val subtitle  = setNameLine(p)
 
         // All kinds share the same title layout: brand wordmark +
         // RelativeSizeSpan'd headline pct. Watchlist prepends a 👁
@@ -105,8 +104,24 @@ object V4NotificationRenderer {
         val titleTail = brandTitleTailSpannable(p)
         collapsed.setTextViewText(R.id.notif_title_tail, titleTail)
         expanded.setTextViewText(R.id.notif_title_tail, titleTail)
-        collapsed.setTextViewText(R.id.notif_subtitle, subtitle)
-        expanded.setTextViewText(R.id.notif_setname, subtitle)
+
+        // Body header — seller's raw title (verbatim from the
+        // marketplace). Collapsed heads-up shows the same string
+        // single-line ellipsized; expanded lets it wrap to 2 lines.
+        val sellerTitle: CharSequence = p.sellerTitle.ifBlank { p.setName }
+        collapsed.setTextViewText(R.id.notif_subtitle, sellerTitle)
+        expanded.setTextViewText(R.id.notif_setname, sellerTitle)
+
+        // Secondary catalogue-match line — "{set_num} · {catalogue_name}".
+        // Only shown when a catalogue match was found (set_name non-blank).
+        if (p.setName.isNotBlank() && p.setNum.isNotBlank()) {
+            val baseNum = p.setNum.substringBefore("-")
+            expanded.setViewVisibility(R.id.notif_catalogue_line, View.VISIBLE)
+            expanded.setTextViewText(R.id.notif_catalogue_line,
+                "$baseNum · ${p.setName}")
+        } else {
+            expanded.setViewVisibility(R.id.notif_catalogue_line, View.GONE)
+        }
 
         // Tier banner + footer — present only when the V4 payload
         // carries a `tier` block (Yellow / Amber). Plain Green deals
@@ -250,14 +265,6 @@ object V4NotificationRenderer {
         "vinted"   -> R.drawable.brand_vinted
         "facebook" -> R.drawable.brand_facebook
         else       -> R.drawable.brand_ebay
-    }
-
-    private fun setNameLine(p: V4Payload): CharSequence {
-        val n = p.setNum.takeIf { it.isNotBlank() } ?: return p.setName
-        val baseNum = n.substringBefore("-")
-        return if (baseNum.isNotBlank() && !p.setName.contains(baseNum)) {
-            "${p.setName} · $baseNum"
-        } else p.setName
     }
 
     /** Populate one of the two grid rows. Top row = New prices (asking

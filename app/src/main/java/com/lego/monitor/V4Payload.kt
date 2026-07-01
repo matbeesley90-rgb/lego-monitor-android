@@ -14,6 +14,14 @@ import org.json.JSONObject
 data class V4Payload(
     val kind: String,           // "deal" | "auction" (watchlist retired)
     val brand: String,          // "ebay" | "vinted" | "facebook"
+    // Primary body header — the seller's raw marketplace title
+    // (was `set_name` mislabelled before 2026-07-01 when a Darth
+    // Vader Transformation catalogue match shadowed an Anakin
+    // listing). Wraps to 2 lines on the phone.
+    val sellerTitle: String,
+    // Catalogue name (bl_name). May be empty when no catalogue match
+    // — the renderer hides the secondary line in that case. Set
+    // number below is the discriminator on the same secondary line.
     val setName: String,
     val setNum: String,
     val pct: Int,
@@ -53,6 +61,7 @@ data class V4Payload(
                 V4Payload(
                     kind         = o.optString("kind", "deal"),
                     brand        = o.optString("brand", "ebay"),
+                    sellerTitle  = o.optString("seller_title", ""),
                     setName      = o.optString("set_name", ""),
                     setNum       = o.optString("set_num", ""),
                     pct          = o.optInt("pct", 0),
