@@ -381,8 +381,15 @@ object V4NotificationRenderer {
             valStart, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
 
         // Percentage "+74%" — bold, pos/neg colour from cell style.
+        // Directional formula — see notifications.py:fmt_pct for the
+        // rationale. Prevents alarming −241% inversions when the
+        // seller's price exceeds the reference.
         sb.append(" ")
-        val pct = ((marketVal - trueCost) / marketVal * 100).roundToInt()
+        val pct = if (trueCost <= marketVal) {
+            ((marketVal - trueCost) / marketVal * 100).roundToInt()
+        } else {
+            (-(trueCost - marketVal) / trueCost * 100).roundToInt()
+        }
         val sign = if (pct >= 0) "+" else ""
         val pctStart = sb.length
         sb.append("$sign$pct%")
