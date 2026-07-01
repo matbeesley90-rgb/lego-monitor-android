@@ -74,19 +74,6 @@
         android:ellipsize="end"
         android:layout_marginTop="2dp" />
 
-    <!-- Secondary catalogue-match line — "75183 · Darth Vader
-         Transformation" muted grey underneath. Hidden entirely when
-         the payload's set_name is empty (no catalogue match). -->
-    <TextView
-        android:id="@+id/notif_catalogue_line"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:textSize="11sp"
-        android:textColor="#9AA0A6"
-        android:singleLine="true"
-        android:ellipsize="end"
-        android:layout_marginTop="1dp"
-        android:visibility="gone" />
 
     <!-- Grid row 1: New prices -->
     <LinearLayout

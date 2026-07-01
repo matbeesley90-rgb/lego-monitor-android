@@ -108,20 +108,14 @@ object V4NotificationRenderer {
         // Body header — seller's raw title (verbatim from the
         // marketplace). Collapsed heads-up shows the same string
         // single-line ellipsized; expanded lets it wrap to 2 lines.
+        // Secondary catalogue-match line retired 2026-07-01 — the
+        // seller title already contains the set number and marketing
+        // name in practically every case; a second line was pure
+        // noise. p.setName is retained on the payload as a defensive
+        // fallback here (empty seller title → use catalogue name).
         val sellerTitle: CharSequence = p.sellerTitle.ifBlank { p.setName }
         collapsed.setTextViewText(R.id.notif_subtitle, sellerTitle)
         expanded.setTextViewText(R.id.notif_setname, sellerTitle)
-
-        // Secondary catalogue-match line — "{set_num} · {catalogue_name}".
-        // Only shown when a catalogue match was found (set_name non-blank).
-        if (p.setName.isNotBlank() && p.setNum.isNotBlank()) {
-            val baseNum = p.setNum.substringBefore("-")
-            expanded.setViewVisibility(R.id.notif_catalogue_line, View.VISIBLE)
-            expanded.setTextViewText(R.id.notif_catalogue_line,
-                "$baseNum · ${p.setName}")
-        } else {
-            expanded.setViewVisibility(R.id.notif_catalogue_line, View.GONE)
-        }
 
         // Tier banner + footer — present only when the V4 payload
         // carries a `tier` block (Yellow / Amber). Plain Green deals
