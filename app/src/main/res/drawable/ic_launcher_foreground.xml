@@ -1,29 +1,47 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Adaptive launcher foreground — the same 2x2 brick silhouette as the
-  notification icon, white, scaled into the 66/108dp adaptive safe zone.
+  Adaptive launcher foreground — classic minifig head: yellow with
+  black outline, dot eyes, smile, stud on top, neck below. Drawn
+  outline-as-fill (black shape behind, yellow inset in front) so the
+  line weight survives every launcher mask and size.
+  Canvas 108dp, content kept inside the 66dp safe zone (21..87).
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <group
-        android:scaleX="2.2"
-        android:scaleY="2.2"
-        android:translateX="27.6"
-        android:translateY="24.0">
-        <path
-            android:fillColor="#FFFFFF"
-            android:pathData="M3,10 L21,10 L21,20 Q21,21 20,21 L4,21 Q3,21 3,20 Z" />
-        <path
-            android:fillColor="#FFFFFF"
-            android:pathData="M7,7 m-2,0 a2,2 0 1,0 4,0 a2,2 0 1,0 -4,0" />
-        <path
-            android:fillColor="#FFFFFF"
-            android:pathData="M12,7 m-2,0 a2,2 0 1,0 4,0 a2,2 0 1,0 -4,0" />
-        <path
-            android:fillColor="#FFFFFF"
-            android:pathData="M17,7 m-2,0 a2,2 0 1,0 4,0 a2,2 0 1,0 -4,0" />
-    </group>
+
+    <!-- ── black outline layer ── -->
+    <!-- top stud -->
+    <path android:fillColor="#1A1A1A"
+        android:pathData="M43,27 L65,27 Q67,27 67,29 L67,41 L41,41 L41,29 Q41,27 43,27 Z" />
+    <!-- neck -->
+    <path android:fillColor="#1A1A1A"
+        android:pathData="M40,78 L68,78 L68,85 Q68,87 66,87 L42,87 Q40,87 40,85 Z" />
+    <!-- head -->
+    <path android:fillColor="#1A1A1A"
+        android:pathData="M42,36 L66,36 Q79,36 79,49 L79,68 Q79,81 66,81 L42,81 Q29,81 29,68 L29,49 Q29,36 42,36 Z" />
+
+    <!-- ── yellow layer ── -->
+    <!-- stud inner -->
+    <path android:fillColor="#FFD500"
+        android:pathData="M45.5,31.5 L62.5,31.5 L62.5,38 L45.5,38 Z" />
+    <!-- neck inner -->
+    <path android:fillColor="#FFD500"
+        android:pathData="M44.5,81 L63.5,81 L63.5,83 L44.5,83 Z" />
+    <!-- head inner -->
+    <path android:fillColor="#FFD500"
+        android:pathData="M43,40.5 L65,40.5 Q74.5,40.5 74.5,50 L74.5,67 Q74.5,76.5 65,76.5 L43,76.5 Q33.5,76.5 33.5,67 L33.5,50 Q33.5,40.5 43,40.5 Z" />
+
+    <!-- ── face ── -->
+    <path android:fillColor="#1A1A1A"
+        android:pathData="M46.5,55 m-3.4,0 a3.4,3.4 0 1,0 6.8,0 a3.4,3.4 0 1,0 -6.8,0" />
+    <path android:fillColor="#1A1A1A"
+        android:pathData="M61.5,55 m-3.4,0 a3.4,3.4 0 1,0 6.8,0 a3.4,3.4 0 1,0 -6.8,0" />
+    <path android:strokeColor="#1A1A1A"
+        android:strokeWidth="3.6"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000"
+        android:pathData="M45,64.5 Q54,71.5 63,64.5" />
 </vector>

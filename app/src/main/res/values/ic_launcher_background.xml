@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- LEGO brick red — launcher icon backdrop -->
-    <color name="ic_launcher_background">#D01012</color>
+    <!-- LEGO clean white — minifig head reads like the classic sticker — launcher icon backdrop -->
+    <color name="ic_launcher_background">#FFFFFF</color>
 </resources>
