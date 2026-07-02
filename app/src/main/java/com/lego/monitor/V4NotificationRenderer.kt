@@ -252,7 +252,7 @@ object V4NotificationRenderer {
         }
 
         val builder = NotificationCompat.Builder(ctx, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_notification_brick)
+            .setSmallIcon(R.drawable.ic_notification_head)
             .setColor(accent)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)

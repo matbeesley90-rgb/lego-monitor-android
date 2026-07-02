@@ -191,7 +191,7 @@ class WebSocketService : Service() {
 
     private fun buildFgNotification(text: String): Notification =
         NotificationCompat.Builder(this, FG_CHANNEL_ID_MIN)
-            .setSmallIcon(R.drawable.ic_notification_brick)
+            .setSmallIcon(R.drawable.ic_notification_head)
             .setContentTitle("LEGO Monitor")
             .setContentText(text)
             .setOngoing(true)

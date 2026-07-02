@@ -35,7 +35,7 @@ object NotificationRenderer {
 
         val channel = if (isBundle) BUNDLE_CHANNEL_ID else CHANNEL_ID
         val builder = NotificationCompat.Builder(ctx, channel)
-            .setSmallIcon(R.drawable.ic_notification_brick)
+            .setSmallIcon(R.drawable.ic_notification_head)
             .setContentTitle(if (title.isNotBlank()) title
                              else if (isBundle) "LEGO bundle" else "LEGO deal")
             .setContentText(body)
