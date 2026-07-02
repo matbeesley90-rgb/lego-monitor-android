@@ -44,6 +44,7 @@ class WebSocketService : Service() {
 
         // Foreground-notification plumbing.
         private const val FG_CHANNEL_ID = "lego_monitor_status"
+        private const val FG_CHANNEL_ID_MIN = "lego_monitor_service_min"
         private const val FG_NOTIFICATION_ID = 1
 
         // Broadcast wiring so the Activity can show the live state.
@@ -169,25 +170,34 @@ class WebSocketService : Service() {
     private fun ensureChannel() {
         val mgr = getSystemService(NotificationManager::class.java)
         if (Build.VERSION.SDK_INT >= 26) {
+            // IMPORTANCE_MIN: silent, no status-bar icon, collapsed into
+            // the drawer's silent section — as invisible as Android
+            // allows a foreground-service notification to be. (Zero is
+            // impossible: the OS mandates a notification for a
+            // persistent socket, and channel importance can't be
+            // lowered after creation, hence the new channel id.)
             val ch = NotificationChannel(
-                FG_CHANNEL_ID, "LEGO Monitor status",
-                NotificationManager.IMPORTANCE_LOW
+                FG_CHANNEL_ID_MIN, "Service status",
+                NotificationManager.IMPORTANCE_MIN
             ).apply {
-                description = "Persistent listener for deal notifications"
+                description = "Background connection status (hidden)"
                 setShowBadge(false)
             }
             mgr.createNotificationChannel(ch)
+            // Retire the old, more visible status channel if present.
+            try { mgr.deleteNotificationChannel(FG_CHANNEL_ID) } catch (_: Exception) {}
         }
     }
 
     private fun buildFgNotification(text: String): Notification =
-        NotificationCompat.Builder(this, FG_CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
+        NotificationCompat.Builder(this, FG_CHANNEL_ID_MIN)
+            .setSmallIcon(R.drawable.ic_notification_brick)
             .setContentTitle("LEGO Monitor")
             .setContentText(text)
             .setOngoing(true)
             .setSilent(true)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setShowWhen(false)
+            .setPriority(NotificationCompat.PRIORITY_MIN)
             .build()
 
     private fun updateFgNotification(text: String) {
