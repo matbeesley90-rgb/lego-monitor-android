@@ -21,8 +21,9 @@ import org.json.JSONObject
 object NotificationRenderer {
 
     private const val CHANNEL_ID = "lego_monitor_alerts"
+    private const val BUNDLE_CHANNEL_ID = "lego_monitor_bundles"
 
-    fun show(ctx: Context, frame: JSONObject) {
+    fun show(ctx: Context, frame: JSONObject, isBundle: Boolean = false) {
         ensureChannel(ctx)
 
         val title  = frame.optString("title")
@@ -32,12 +33,15 @@ object NotificationRenderer {
         // in the tray rather than overwriting the previous one.
         val notifId = msgId.hashCode()
 
-        val builder = NotificationCompat.Builder(ctx, CHANNEL_ID)
+        val channel = if (isBundle) BUNDLE_CHANNEL_ID else CHANNEL_ID
+        val builder = NotificationCompat.Builder(ctx, channel)
             .setSmallIcon(R.drawable.ic_notification_brick)
-            .setContentTitle(if (title.isNotBlank()) title else "LEGO deal")
+            .setContentTitle(if (title.isNotBlank()) title
+                             else if (isBundle) "LEGO bundle" else "LEGO deal")
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setPriority(if (isBundle) NotificationCompat.PRIORITY_DEFAULT
+                         else NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
 
         // Up to 3 action buttons from ntfy's actions array. Each gets an
@@ -65,14 +69,22 @@ object NotificationRenderer {
 
     private fun ensureChannel(ctx: Context) {
         if (Build.VERSION.SDK_INT < 26) return
-        val ch = NotificationChannel(
+        val mgr = ctx.getSystemService(NotificationManager::class.java)
+        mgr.createNotificationChannel(NotificationChannel(
             CHANNEL_ID, "Deal alerts",
             NotificationManager.IMPORTANCE_HIGH
         ).apply {
             description = "LEGO marketplace deal notifications"
             enableVibration(true)
-        }
-        ctx.getSystemService(NotificationManager::class.java)
-            .createNotificationChannel(ch)
+        })
+        // Separate channel = independent mute/sound/vibration control in
+        // Android settings, without a second app or topic client.
+        mgr.createNotificationChannel(NotificationChannel(
+            BUNDLE_CHANNEL_ID, "Bundle alerts 📦",
+            NotificationManager.IMPORTANCE_DEFAULT
+        ).apply {
+            description = "Job-lot / bundle heads-up notifications"
+            enableVibration(false)
+        })
     }
 }

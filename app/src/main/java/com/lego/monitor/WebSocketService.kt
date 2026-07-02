@@ -31,11 +31,16 @@ class WebSocketService : Service() {
     companion object {
         private const val TAG = "LegoWS"
 
-        // Same topic the existing ntfy-Android app subscribes to. Phase 1
-        // runs in parallel with ntfy-Android so we see notifications in
-        // BOTH apps and can compare.
+        // Main deal topic + the dedicated bundle topic, multiplexed over
+        // ONE WebSocket (ntfy accepts comma-joined topics in the path).
+        // Bundle frames render on their own notification channel so 📦
+        // pushes can be muted in Android settings independently of deal
+        // alerts. Server side: config key `bundle_ntfy_topic` must be
+        // set to TOPIC_BUNDLES *after* this build is installed.
+        const val TOPIC_MAIN    = "lego-monitor-xeP73SxvVPlq"
+        const val TOPIC_BUNDLES = "lego-monitor-bundles-xeP73SxvVPlq"
         private const val WS_URL =
-            "ws://81.96.120.250:8084/lego-monitor-xeP73SxvVPlq/ws"
+            "ws://81.96.120.250:8084/$TOPIC_MAIN,$TOPIC_BUNDLES/ws"
 
         // Foreground-notification plumbing.
         private const val FG_CHANNEL_ID = "lego_monitor_status"
@@ -138,12 +143,16 @@ class WebSocketService : Service() {
             // Phase 1 stock notification path so a plain-text test
             // (e.g. curl -d "hello") still shows something useful.
             val msgBody = obj.optString("message")
+            val isBundle = obj.optString("topic") == TOPIC_BUNDLES
             val v4 = V4Payload.tryParse(msgBody)
-            Log.d(TAG, "WS routing: v4_parsed=${v4 != null}  body_starts='${msgBody.take(60)}'")
-            if (v4 != null) {
+            Log.d(TAG, "WS routing: v4_parsed=${v4 != null} bundle=$isBundle body_starts='${msgBody.take(60)}'")
+            if (v4 != null && !isBundle) {
                 V4NotificationRenderer.show(applicationContext, obj, v4)
             } else {
-                NotificationRenderer.show(applicationContext, obj)
+                // Bundle frames always take the stock renderer on the
+                // dedicated bundle channel — they're plain text by
+                // design (no set number, no price grid).
+                NotificationRenderer.show(applicationContext, obj, isBundle)
             }
         } catch (e: Exception) {
             // Full stack trace — Log.w(tag, msg, e) prints the throwable
