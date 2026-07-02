@@ -146,12 +146,15 @@ class WebSocketService : Service() {
             val isBundle = obj.optString("topic") == TOPIC_BUNDLES
             val v4 = V4Payload.tryParse(msgBody)
             Log.d(TAG, "WS routing: v4_parsed=${v4 != null} bundle=$isBundle body_starts='${msgBody.take(60)}'")
-            if (v4 != null && !isBundle) {
+            if (v4 != null) {
+                // V4 payloads — deals, auctions AND bundles — all render
+                // through the V4 pipeline (the renderer branches on
+                // kind=="bundle" for the 📦 pct slot + figs footer).
                 V4NotificationRenderer.show(applicationContext, obj, v4)
             } else {
-                // Bundle frames always take the stock renderer on the
-                // dedicated bundle channel — they're plain text by
-                // design (no set number, no price grid).
+                // Plain-text frames (legacy bundles, system alerts,
+                // tests) take the stock renderer; bundle-topic frames
+                // land on the dedicated mutable channel.
                 NotificationRenderer.show(applicationContext, obj, isBundle)
             }
         } catch (e: Exception) {
