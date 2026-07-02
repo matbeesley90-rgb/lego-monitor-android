@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Adaptive launcher foreground — the same 2x2 brick silhouette as the
+  notification icon, white, scaled into the 66/108dp adaptive safe zone.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:scaleX="2.2"
+        android:scaleY="2.2"
+        android:translateX="27.6"
+        android:translateY="24.0">
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M3,10 L21,10 L21,20 Q21,21 20,21 L4,21 Q3,21 3,20 Z" />
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M7,7 m-2,0 a2,2 0 1,0 4,0 a2,2 0 1,0 -4,0" />
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M12,7 m-2,0 a2,2 0 1,0 4,0 a2,2 0 1,0 -4,0" />
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M17,7 m-2,0 a2,2 0 1,0 4,0 a2,2 0 1,0 -4,0" />
+    </group>
+</vector>
