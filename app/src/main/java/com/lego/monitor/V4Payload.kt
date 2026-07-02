@@ -44,6 +44,10 @@ data class V4Payload(
     // Tier metadata (Yellow / Amber). Null when the payload is a plain
     // Green deal or an auction — neither shows the banner stripe.
     val tier: TierInfo? = null,
+
+    // Bundles only — server-composed figs summary rendered in the
+    // footer slot (e.g. "8 figs • £1.01/fig", "~£35 in 10 figs (1.7x)").
+    val bundleLine: String = "",
 ) {
     val isAuction: Boolean get() = kind == "auction"
 
@@ -79,6 +83,7 @@ data class V4Payload(
                     endIso       = auc?.optString("end_iso"),
                     style        = V4Style.parse(o.optJSONObject("style")),
                     tier         = TierInfo.parse(o.optJSONObject("tier")),
+                    bundleLine   = o.optString("bundle_line", ""),
                 )
             } catch (_: Exception) {
                 null

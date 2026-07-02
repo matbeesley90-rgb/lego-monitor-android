@@ -161,9 +161,18 @@ object V4NotificationRenderer {
             }
         } else {
             expanded.setViewVisibility(R.id.notif_banner, View.GONE)
-            expanded.setViewVisibility(R.id.notif_footer, View.GONE)
             collapsed.setViewVisibility(R.id.notif_collapsed_stripe, View.GONE)
             collapsed.setViewVisibility(R.id.notif_collapsed_top_stripe, View.GONE)
+            if (p.kind == "bundle" && p.bundleLine.isNotBlank()) {
+                // Bundles: no tier banner/stripe, but the footer slot
+                // carries the server-composed figs line ("8 figs •
+                // £1.01/fig" or the vision estimate) — the same
+                // position the profit line occupies on tiered deals.
+                expanded.setViewVisibility(R.id.notif_footer, View.VISIBLE)
+                expanded.setTextViewText(R.id.notif_footer, p.bundleLine)
+            } else {
+                expanded.setViewVisibility(R.id.notif_footer, View.GONE)
+            }
         }
 
         // Apply runtime-tunable sizes (from V4Style) to every text view
@@ -272,7 +281,10 @@ object V4NotificationRenderer {
         val sb = SpannableStringBuilder()
         sb.append("• ")
         val pctStart = sb.length
-        sb.append("${p.pct}%")
+        // Bundles have no meaningful headline % — the 📦 marker sits in
+        // the pct slot at the same scale, so collapsed reads
+        // "[brand] • 📦" exactly where a deal reads "[brand] • 67%".
+        sb.append(if (p.kind == "bundle") "\uD83D\uDCE6" else "${p.pct}%")
         val pctEnd = sb.length
         // Headline pct: RelativeSizeSpan scales it above the base, colour
         // from style.
