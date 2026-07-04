@@ -314,6 +314,19 @@ object V4NotificationRenderer {
                     Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
             }
         }
+        // Fig-value band marker — a coloured dot right after the pct on
+        // the title line (collapsed AND expanded), painted the same
+        // band colour as the monitor card border for the priciest fig
+        // in the set: green £10+ / orange £20+ / gold £30+ / RED £50+.
+        if (p.iconColor.isNotBlank()) {
+            try {
+                val dotColor = Color.parseColor(p.iconColor)
+                val dotStart = sb.length
+                sb.append(" \u25CF")
+                sb.setSpan(ForegroundColorSpan(dotColor),
+                    dotStart, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            } catch (_: Exception) { /* bad hex — no marker */ }
+        }
         return sb
     }
 
