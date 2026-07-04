@@ -330,6 +330,13 @@ object V4NotificationRenderer {
                     Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
             }
         }
+        // Mat's spec: the head is the last element on the row, preceded
+        // by the same plain "•" separator as everything else —
+        // "ebay • 70% • [head]" / "ebay • 70% • 5m • [head]". Only
+        // appended when a band applies (head hidden otherwise).
+        if (p.iconColor.isNotBlank()) {
+            sb.append(" •")
+        }
         return sb
     }
 

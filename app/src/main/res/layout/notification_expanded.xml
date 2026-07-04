@@ -57,6 +57,7 @@
             android:textSize="15sp"
             android:textStyle="bold"
             android:singleLine="true"
+            android:includeFontPadding="false"
             android:ellipsize="end" />
 
         <!-- Fig-value head: the noticon, tinted to the max-fig band,
@@ -67,7 +68,6 @@
             android:layout_height="15dp"
             android:layout_marginStart="6dp"
             android:layout_gravity="center_vertical"
-            android:layout_marginTop="1dp"
             android:src="@drawable/ic_notification_head"
             android:visibility="gone"
             android:contentDescription="@null" />
