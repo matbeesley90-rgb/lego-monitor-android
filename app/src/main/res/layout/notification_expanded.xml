@@ -70,11 +70,6 @@
             android:src="@drawable/ic_notification_head"
             android:visibility="gone"
             android:contentDescription="@null" />
-
-        <View
-            android:layout_width="0dp"
-            android:layout_height="1dp"
-            android:layout_weight="1" />
     </LinearLayout>
 
     <!-- Primary body header — seller's raw listing title. Wraps to
