@@ -63,10 +63,11 @@
              sitting right after the %. GONE unless a band applies. -->
         <ImageView
             android:id="@+id/notif_fig_head"
-            android:layout_width="16dp"
-            android:layout_height="16dp"
+            android:layout_width="15dp"
+            android:layout_height="15dp"
             android:layout_marginStart="6dp"
             android:layout_gravity="center_vertical"
+            android:layout_marginTop="1dp"
             android:src="@drawable/ic_notification_head"
             android:visibility="gone"
             android:contentDescription="@null" />
