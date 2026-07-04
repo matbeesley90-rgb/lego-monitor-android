@@ -245,10 +245,20 @@ object V4NotificationRenderer {
         // multi-notification stack shows a coloured icon in the row
         // that matters. Also tints the small-icon on heads-up + lock
         // screen — consistent tier cue across every surface.
-        val accent = when (tier?.name) {
-            "yellow" -> tier.bannerColor
-            "amber"  -> tier.bannerColor
-            else     -> Color.parseColor("#3B98E0")  // brand blue
+        // Priority: server-sent icon_color (max-fig-value band, matching
+        // the monitor card border: gold >=£50, red >=£30, orange >=£20,
+        // green >=£10) > tier colour > brand blue. The head silhouette
+        // in the status bar becomes a value cue for the best fig in the
+        // set at a glance.
+        val accent = when {
+            p.iconColor.isNotBlank() -> try {
+                Color.parseColor(p.iconColor)
+            } catch (_: Exception) {
+                Color.parseColor("#3B98E0")
+            }
+            tier?.name == "yellow" -> tier.bannerColor
+            tier?.name == "amber"  -> tier.bannerColor
+            else -> Color.parseColor("#3B98E0")  // brand blue
         }
 
         val builder = NotificationCompat.Builder(ctx, CHANNEL_ID)

@@ -48,6 +48,10 @@ data class V4Payload(
     // Bundles only — server-composed figs summary rendered in the
     // footer slot (e.g. "8 figs • £1.01/fig", "~£35 in 10 figs (1.7x)").
     val bundleLine: String = "",
+
+    // Max-fig-value band colour (hex) — tints the status-bar head to
+    // match the monitor card border for the priciest fig in the set.
+    val iconColor: String = "",
 ) {
     val isAuction: Boolean get() = kind == "auction"
 
@@ -84,6 +88,7 @@ data class V4Payload(
                     style        = V4Style.parse(o.optJSONObject("style")),
                     tier         = TierInfo.parse(o.optJSONObject("tier")),
                     bundleLine   = o.optString("bundle_line", ""),
+                    iconColor    = o.optString("icon_color", ""),
                 )
             } catch (_: Exception) {
                 null
