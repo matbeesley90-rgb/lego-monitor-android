@@ -79,14 +79,30 @@
 
         <TextView
             android:id="@+id/notif_title_tail"
-            android:layout_width="0dp"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
             android:layout_marginStart="6dp"
             android:textSize="13sp"
             android:textStyle="bold"
             android:singleLine="true"
             android:ellipsize="end" />
+
+        <!-- Fig-value head: the noticon, tinted to the max-fig band,
+             sitting right after the %. GONE unless a band applies. -->
+        <ImageView
+            android:id="@+id/notif_fig_head"
+            android:layout_width="14dp"
+            android:layout_height="14dp"
+            android:layout_marginStart="5dp"
+            android:layout_gravity="center_vertical"
+            android:src="@drawable/ic_notification_head"
+            android:visibility="gone"
+            android:contentDescription="@null" />
+
+        <View
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_weight="1" />
     </LinearLayout>
 
     <TextView

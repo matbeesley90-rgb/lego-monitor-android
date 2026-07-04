@@ -245,6 +245,22 @@ object V4NotificationRenderer {
         // multi-notification stack shows a coloured icon in the row
         // that matters. Also tints the small-icon on heads-up + lock
         // screen — consistent tier cue across every surface.
+        // Fig-value head on the card title row — the noticon tinted to
+        // the band colour, right after the %. Both surfaces; hidden
+        // when no band applies.
+        if (p.iconColor.isNotBlank()) {
+            try {
+                val band = Color.parseColor(p.iconColor)
+                for (rv in listOf(collapsed, expanded)) {
+                    rv.setViewVisibility(R.id.notif_fig_head, View.VISIBLE)
+                    rv.setInt(R.id.notif_fig_head, "setColorFilter", band)
+                }
+            } catch (_: Exception) {}
+        } else {
+            collapsed.setViewVisibility(R.id.notif_fig_head, View.GONE)
+            expanded.setViewVisibility(R.id.notif_fig_head, View.GONE)
+        }
+
         // Priority: server-sent icon_color (max-fig-value band, matching
         // the monitor card border: gold >=£50, red >=£30, orange >=£20,
         // green >=£10) > tier colour > brand blue. The head silhouette
