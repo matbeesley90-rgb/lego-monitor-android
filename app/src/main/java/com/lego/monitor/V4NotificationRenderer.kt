@@ -306,6 +306,16 @@ object V4NotificationRenderer {
         val s = p.style
         val sb = SpannableStringBuilder()
         sb.append("• ")
+        // Asking price on the title line — the number that decides whether a
+        // deal is worth opening. Kept here (not just in the price grid below)
+        // so it survives the collapsed / stacked tray view, where the grid is
+        // hidden. Blue to match the card headline; rounded so title and grid
+        // agree (fillGridRow uses the same asking.roundToInt()).
+        val priceStart = sb.length
+        sb.append("£${p.asking.roundToInt()}")
+        sb.setSpan(ForegroundColorSpan(Color.parseColor("#3B98E0")),
+            priceStart, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        sb.append(" • ")
         val pctStart = sb.length
         // Bundles have no meaningful headline % — the 📦 marker sits in
         // the pct slot at the same scale, so collapsed reads
