@@ -1,17 +1,32 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Home screen — the Pi-hosted web UI (listings / catalogue / filters /
+  settings) rendered full-screen in a WebView. A thin status strip sits
+  above it reflecting the ntfy WebSocket connection state; it's GONE
+  once "Connected" so the UI gets the whole screen, and reappears
+  (amber) only while connecting or on a drop. The WebSocketService
+  still runs in the background handling notification pushes.
+-->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:gravity="center"
-    android:padding="24dp">
+    android:orientation="vertical">
 
     <TextView
         android:id="@+id/statusText"
-        android:layout_width="wrap_content"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:textSize="18sp"
-        android:textAlignment="center"
+        android:padding="6dp"
+        android:gravity="center"
+        android:textSize="12sp"
+        android:textColor="#FFFFFF"
+        android:background="#B26A00"
         android:text="@string/initial_status" />
+
+    <WebView
+        android:id="@+id/webView"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
 
 </LinearLayout>
