@@ -248,17 +248,33 @@ object V4NotificationRenderer {
         // Fig-value head on the card title row — the noticon tinted to
         // the band colour, right after the %. Both surfaces; hidden
         // when no band applies.
-        if (p.iconColor.isNotBlank()) {
+        if (p.kind == "bundle") {
+            // Bundle marker: stacked bricks + muted grey head, sitting
+            // together (no separator) after "• £X •". Grey — not a fig-
+            // value band colour — because a bundle's contents (sets or
+            // figs) and their value are unknown. Both tinted the same
+            // muted grey so they read as one "bundle" unit.
+            val greyMarker = Color.parseColor("#8A8A95")
+            for (rv in listOf(collapsed, expanded)) {
+                rv.setViewVisibility(R.id.notif_bundle_bricks, View.VISIBLE)
+                rv.setInt(R.id.notif_bundle_bricks, "setColorFilter", greyMarker)
+                rv.setViewVisibility(R.id.notif_fig_head, View.VISIBLE)
+                rv.setInt(R.id.notif_fig_head, "setColorFilter", greyMarker)
+            }
+        } else if (p.iconColor.isNotBlank()) {
             try {
                 val band = Color.parseColor(p.iconColor)
                 for (rv in listOf(collapsed, expanded)) {
+                    rv.setViewVisibility(R.id.notif_bundle_bricks, View.GONE)
                     rv.setViewVisibility(R.id.notif_fig_head, View.VISIBLE)
                     rv.setInt(R.id.notif_fig_head, "setColorFilter", band)
                 }
             } catch (_: Exception) {}
         } else {
-            collapsed.setViewVisibility(R.id.notif_fig_head, View.GONE)
-            expanded.setViewVisibility(R.id.notif_fig_head, View.GONE)
+            for (rv in listOf(collapsed, expanded)) {
+                rv.setViewVisibility(R.id.notif_bundle_bricks, View.GONE)
+                rv.setViewVisibility(R.id.notif_fig_head, View.GONE)
+            }
         }
 
         // Priority: server-sent icon_color (max-fig-value band, matching
@@ -315,12 +331,19 @@ object V4NotificationRenderer {
         sb.append("£${p.asking.roundToInt()}")
         sb.setSpan(ForegroundColorSpan(Color.parseColor("#3B98E0")),
             priceStart, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        // Bundles have no meaningful headline % (nothing to compare
+        // against, and no known fig value). Instead of a pct the title
+        // row carries the stacked-bricks marker + a muted grey head —
+        // both ImageViews, set VISIBLE in post(). Here we just close the
+        // text with a trailing "•" so it reads "[brand] • £19 •" and the
+        // bricks+head pair sit right after it as one "bundle" unit.
+        if (p.kind == "bundle") {
+            sb.append(" •")
+            return sb
+        }
         sb.append(" • ")
         val pctStart = sb.length
-        // Bundles have no meaningful headline % — the 📦 marker sits in
-        // the pct slot at the same scale, so collapsed reads
-        // "[brand] • 📦" exactly where a deal reads "[brand] • 67%".
-        sb.append(if (p.kind == "bundle") "\uD83D\uDCE6" else "${p.pct}%")
+        sb.append("${p.pct}%")
         val pctEnd = sb.length
         // Headline pct: RelativeSizeSpan scales it above the base, colour
         // from style.

@@ -88,6 +88,19 @@
             android:includeFontPadding="false"
             android:ellipsize="end" />
 
+        <!-- Bundle marker: stacked bricks, tinted muted grey, sitting
+             right after "• £X •". Pairs with the grey head that follows
+             (no separator — one "bundle" unit). GONE for non-bundles. -->
+        <ImageView
+            android:id="@+id/notif_bundle_bricks"
+            android:layout_width="13dp"
+            android:layout_height="13dp"
+            android:layout_marginStart="5dp"
+            android:layout_gravity="center_vertical"
+            android:src="@drawable/ic_notification_bundle"
+            android:visibility="gone"
+            android:contentDescription="@null" />
+
         <!-- Fig-value head: the noticon, tinted to the max-fig band,
              sitting right after the %. GONE unless a band applies. -->
         <ImageView

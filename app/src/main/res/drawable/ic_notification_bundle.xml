@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Bundle marker — two stacked LEGO bricks (a front 2-stud brick with a
+  larger 2-stud brick behind it, offset up). Says "mixed lot" for a
+  bundle listing, sitting next to a muted grey minifig head in the
+  title row. White fill so setColorFilter() can tint it to the same
+  muted grey as the bundle head; the back brick carries fillAlpha 0.62
+  for a hint of depth (survives SRC_ATOP tinting as reduced alpha).
+  Rects from the Option-A mockup, expressed as rounded-rect paths
+  (VectorDrawable has no <rect>).
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+    <!-- ── back brick (offset up, dimmed for depth) ── -->
+    <!-- back stud left -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.62"
+        android:pathData="M9.6,3 L10.8,3 Q11.4,3 11.4,3.6 L11.4,4.4 Q11.4,5 10.8,5 L9.6,5 Q9,5 9,4.4 L9,3.6 Q9,3 9.6,3 Z" />
+    <!-- back stud right -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.62"
+        android:pathData="M16.2,3 L17.4,3 Q18,3 18,3.6 L18,4.4 Q18,5 17.4,5 L16.2,5 Q15.6,5 15.6,4.4 L15.6,3.6 Q15.6,3 16.2,3 Z" />
+    <!-- back brick body -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.62"
+        android:pathData="M8.2,4.5 L17.8,4.5 Q19,4.5 19,5.7 L19,9.5 Q19,10.7 17.8,10.7 L8.2,10.7 Q7,10.7 7,9.5 L7,5.7 Q7,4.5 8.2,4.5 Z" />
+
+    <!-- ── front brick ── -->
+    <!-- front stud left -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M6.8,10.8 L8.2,10.8 Q8.8,10.8 8.8,11.4 L8.8,12.4 Q8.8,13 8.2,13 L6.8,13 Q6.2,13 6.2,12.4 L6.2,11.4 Q6.2,10.8 6.8,10.8 Z" />
+    <!-- front stud right -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M15.8,10.8 L17.2,10.8 Q17.8,10.8 17.8,11.4 L17.8,12.4 Q17.8,13 17.2,13 L15.8,13 Q15.2,13 15.2,12.4 L15.2,11.4 Q15.2,10.8 15.8,10.8 Z" />
+    <!-- front brick body -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M5.3,12.5 L18.7,12.5 Q20,12.5 20,13.8 L20,18.2 Q20,19.5 18.7,19.5 L5.3,19.5 Q4,19.5 4,18.2 L4,13.8 Q4,12.5 5.3,12.5 Z" />
+</vector>
