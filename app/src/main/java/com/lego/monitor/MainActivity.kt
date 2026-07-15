@@ -6,7 +6,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
-import android.graphics.Bitmap
 import android.os.Build
 import android.os.Bundle
 import android.view.View
@@ -111,15 +110,34 @@ class MainActivity : AppCompatActivity() {
             loadWithOverviewMode = true
             useWideViewPort = true
         }
-        // Keep every navigation inside the WebView (don't kick to Chrome).
         webView.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(
                 view: WebView, request: WebResourceRequest
-            ): Boolean = false
+            ): Boolean {
+                val uri = request.url
+                val host = uri.host ?: ""
+                // The monitor UI itself (Pi host) stays in the WebView —
+                // internal pages, /vision, API-backed screens, etc.
+                if (host.contains(PI_HOST)) return false
+                // Anything else is a marketplace link the user tapped —
+                // hand it to the matching native app (Vinted / eBay /
+                // Facebook / Gumtree), falling back to a browser.
+                openExternal(uri)
+                return true
+            }
 
-            override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
-                // Reaching the UI proves connectivity to the Pi; the ntfy
-                // status strip is a separate signal, left as-is.
+            override fun onPageFinished(view: WebView, url: String?) {
+                // The web UI opens listings with window.open(url,'_blank'),
+                // which a WebView ignores by default — so a tap would do
+                // nothing. Redirect window.open to a same-window navigation
+                // so shouldOverrideUrlLoading above can route it to the app.
+                view.evaluateJavascript(
+                    "(function(){if(!window.__legoOpenPatched){" +
+                    "window.__legoOpenPatched=1;" +
+                    "window.open=function(u){if(u){window.location.href=u;}" +
+                    "return null;};}})();",
+                    null
+                )
             }
 
             override fun onReceivedError(
@@ -135,6 +153,44 @@ class MainActivity : AppCompatActivity() {
         }
         webView.webChromeClient = WebChromeClient()
         webView.loadUrl(WEB_UI_URL)
+    }
+
+    /**
+     * Open a tapped marketplace listing in its native app. Tries the
+     * specific app package first (so eBay/Vinted/FB/Gumtree open directly
+     * rather than in a browser); if that app isn't installed, falls back
+     * to the OS handler (a browser, or any app with verified App Links),
+     * and finally to loading in the WebView so a tap never dead-ends.
+     */
+    private fun openExternal(uri: android.net.Uri) {
+        val host = uri.host ?: ""
+        val pkg = when {
+            host.contains("vinted")   -> "com.vinted"
+            host.contains("ebay")     -> "com.ebay.mobile"
+            host.contains("facebook") || host.contains("fb.") -> "com.facebook.katana"
+            host.contains("gumtree")  -> "com.gumtree.android"
+            else -> null
+        }
+        if (pkg != null) {
+            try {
+                startActivity(
+                    Intent(Intent.ACTION_VIEW, uri)
+                        .setPackage(pkg)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                )
+                return
+            } catch (_: android.content.ActivityNotFoundException) {
+                // App not installed / doesn't match — fall through.
+            }
+        }
+        try {
+            startActivity(
+                Intent(Intent.ACTION_VIEW, uri)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+        } catch (_: Exception) {
+            webView.loadUrl(uri.toString())
+        }
     }
 
     private fun startMonitorService() {
@@ -157,8 +213,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     companion object {
-        // The Pi-hosted Flask UI. Cleartext to this IP is whitelisted in
-        // network_security_config.xml (same host as the ntfy WebSocket).
-        private const val WEB_UI_URL = "http://81.96.120.250:5000/"
+        // The Pi that hosts both the Flask UI and the ntfy WebSocket.
+        // Cleartext to this IP is whitelisted in network_security_config.xml.
+        private const val PI_HOST = "81.96.120.250"
+        // The Pi-hosted Flask UI.
+        private const val WEB_UI_URL = "http://$PI_HOST:5000/"
     }
 }
