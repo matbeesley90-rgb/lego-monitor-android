@@ -157,16 +157,25 @@ class MainActivity : AppCompatActivity() {
 
     /**
      * Open a tapped marketplace listing in its native app. Tries the
-     * specific app package first (so eBay/Vinted/FB/Gumtree open directly
+     * specific app package first (so Vinted/Facebook/Gumtree open directly
      * rather than in a browser); if that app isn't installed, falls back
      * to the OS handler (a browser, or any app with verified App Links),
      * and finally to loading in the WebView so a tap never dead-ends.
+     *
+     * eBay is the exception: its app is unreliable launching an item from
+     * a cold start (it drops you on an empty "No results found" until the
+     * app is warm), so eBay listings go to the browser — the web page
+     * loads first-time every time. This restores the pre-app behaviour,
+     * where listings opened in the browser from the web UI.
      */
     private fun openExternal(uri: android.net.Uri) {
         val host = uri.host ?: ""
+        if (host.contains("ebay")) {
+            openInBrowser(uri)
+            return
+        }
         val pkg = when {
             host.contains("vinted")   -> "com.vinted"
-            host.contains("ebay")     -> "com.ebay.mobile"
             host.contains("facebook") || host.contains("fb.") -> "com.facebook.katana"
             host.contains("gumtree")  -> "com.gumtree.android"
             else -> null
@@ -190,6 +199,44 @@ class MainActivity : AppCompatActivity() {
             )
         } catch (_: Exception) {
             webView.loadUrl(uri.toString())
+        }
+    }
+
+    /**
+     * Open a URL in the device's default browser as a plain web page —
+     * targeting the browser package explicitly so Android's App Links
+     * don't bounce us into the (cold-start-buggy) eBay app.
+     */
+    private fun openInBrowser(uri: android.net.Uri) {
+        val intent = Intent(Intent.ACTION_VIEW, uri).apply {
+            addCategory(Intent.CATEGORY_BROWSABLE)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        resolveDefaultBrowser()?.let { intent.setPackage(it) }
+        try {
+            startActivity(intent)
+        } catch (_: Exception) {
+            try {
+                startActivity(
+                    Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                )
+            } catch (_: Exception) {
+                webView.loadUrl(uri.toString())
+            }
+        }
+    }
+
+    /** The default browser's package, or null if it can't be resolved
+     *  (in which case the caller lets the OS choose a handler). */
+    private fun resolveDefaultBrowser(): String? {
+        return try {
+            val probe = Intent(Intent.ACTION_VIEW, android.net.Uri.parse("http://example.com"))
+                .addCategory(Intent.CATEGORY_BROWSABLE)
+            val ri = packageManager.resolveActivity(probe, PackageManager.MATCH_DEFAULT_ONLY)
+            val p = ri?.activityInfo?.packageName
+            if (p == null || p == "android") null else p
+        } catch (_: Exception) {
+            null
         }
     }
 
