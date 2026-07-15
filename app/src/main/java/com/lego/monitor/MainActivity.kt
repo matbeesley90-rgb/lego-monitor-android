@@ -127,6 +127,12 @@ class MainActivity : AppCompatActivity() {
             }
 
             override fun onPageFinished(view: WebView, url: String?) {
+                // UI loaded = the app is working; hide the status strip.
+                // (It defaults to hidden and only the ntfy service's own
+                // "not connected" broadcasts or a page-load error bring it
+                // back — so it no longer gets stuck on a stale "Starting…"
+                // when the service connected before this screen opened.)
+                statusView.visibility = View.GONE
                 // The web UI opens listings with window.open(url,'_blank'),
                 // which a WebView ignores by default — so a tap would do
                 // nothing. Redirect window.open to a same-window navigation
