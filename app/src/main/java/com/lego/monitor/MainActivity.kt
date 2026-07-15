@@ -163,32 +163,31 @@ class MainActivity : AppCompatActivity() {
      * App Links), and finally to loading in the WebView so a tap never
      * dead-ends.
      *
-     * eBay quirk: when its app is ALREADY open on a listing, a new item
-     * deep-link with NEW_TASK just resurfaces the existing eBay task
-     * without navigating to the new item ("No results found") — you'd
-     * have to force-close eBay and tap again. CLEAR_TASK reproduces that
-     * close-and-reopen automatically, so each eBay tap loads the new
-     * item fresh.
+     * eBay is the exception: its app can't be made to reliably load a new
+     * item when it's already open (only a full force-close resets it —
+     * which no app can trigger for another), so eBay listings go to the
+     * browser, where they load first-time every time and the user is
+     * already signed in. This restores the pre-app behaviour. The other
+     * three open in their native apps, which handle new deep-links fine.
      */
     private fun openExternal(uri: android.net.Uri) {
         val host = uri.host ?: ""
+        if (host.contains("ebay")) {
+            openInBrowser(uri)
+            return
+        }
         val pkg = when {
             host.contains("vinted")   -> "com.vinted"
-            host.contains("ebay")     -> "com.ebay.mobile"
             host.contains("facebook") || host.contains("fb.") -> "com.facebook.katana"
             host.contains("gumtree")  -> "com.gumtree.android"
             else -> null
         }
         if (pkg != null) {
             try {
-                var flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                if (host.contains("ebay")) {
-                    flags = flags or Intent.FLAG_ACTIVITY_CLEAR_TASK
-                }
                 startActivity(
                     Intent(Intent.ACTION_VIEW, uri)
                         .setPackage(pkg)
-                        .addFlags(flags)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 )
                 return
             } catch (_: android.content.ActivityNotFoundException) {
@@ -202,6 +201,43 @@ class MainActivity : AppCompatActivity() {
             )
         } catch (_: Exception) {
             webView.loadUrl(uri.toString())
+        }
+    }
+
+    /**
+     * Open a URL in the device's default browser as a plain web page,
+     * targeting the browser package explicitly so Android's App Links
+     * don't bounce it into the (unreliable-when-warm) eBay app.
+     */
+    private fun openInBrowser(uri: android.net.Uri) {
+        val intent = Intent(Intent.ACTION_VIEW, uri).apply {
+            addCategory(Intent.CATEGORY_BROWSABLE)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        resolveDefaultBrowser()?.let { intent.setPackage(it) }
+        try {
+            startActivity(intent)
+        } catch (_: Exception) {
+            try {
+                startActivity(
+                    Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                )
+            } catch (_: Exception) {
+                webView.loadUrl(uri.toString())
+            }
+        }
+    }
+
+    /** The default browser's package, or null if it can't be resolved. */
+    private fun resolveDefaultBrowser(): String? {
+        return try {
+            val probe = Intent(Intent.ACTION_VIEW, android.net.Uri.parse("http://example.com"))
+                .addCategory(Intent.CATEGORY_BROWSABLE)
+            val ri = packageManager.resolveActivity(probe, PackageManager.MATCH_DEFAULT_ONLY)
+            val p = ri?.activityInfo?.packageName
+            if (p == null || p == "android") null else p
+        } catch (_: Exception) {
+            null
         }
     }
 
