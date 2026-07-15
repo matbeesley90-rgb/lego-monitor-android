@@ -163,9 +163,12 @@ class MainActivity : AppCompatActivity() {
      * App Links), and finally to loading in the WebView so a tap never
      * dead-ends.
      *
-     * Note: eBay's app is occasionally flaky launching an item from a
-     * cold start ("No results found" until it's warm — eBay's own
-     * deep-link bug, needs a second tap). Mat prefers the app anyway.
+     * eBay quirk: when its app is ALREADY open on a listing, a new item
+     * deep-link with NEW_TASK just resurfaces the existing eBay task
+     * without navigating to the new item ("No results found") — you'd
+     * have to force-close eBay and tap again. CLEAR_TASK reproduces that
+     * close-and-reopen automatically, so each eBay tap loads the new
+     * item fresh.
      */
     private fun openExternal(uri: android.net.Uri) {
         val host = uri.host ?: ""
@@ -178,10 +181,14 @@ class MainActivity : AppCompatActivity() {
         }
         if (pkg != null) {
             try {
+                var flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                if (host.contains("ebay")) {
+                    flags = flags or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                }
                 startActivity(
                     Intent(Intent.ACTION_VIEW, uri)
                         .setPackage(pkg)
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        .addFlags(flags)
                 )
                 return
             } catch (_: android.content.ActivityNotFoundException) {
