@@ -171,10 +171,16 @@ class MainActivity : AppCompatActivity() {
      */
     private fun openExternal(uri: android.net.Uri) {
         val host = uri.host ?: ""
+        // Facebook Marketplace item links are unreliable in the FB app
+        // (it frequently opens the feed instead of the listing), so send
+        // them to the browser where the user is usually already signed in.
+        if (host.contains("facebook") || host.contains("fb.")) {
+            openInBrowser(uri)
+            return
+        }
         val pkg = when {
             host.contains("vinted")   -> "com.vinted"
             host.contains("ebay")     -> "com.ebay.mobile"
-            host.contains("facebook") || host.contains("fb.") -> "com.facebook.katana"
             host.contains("gumtree")  -> "com.gumtree.android"
             else -> null
         }
@@ -187,16 +193,48 @@ class MainActivity : AppCompatActivity() {
                 )
                 return
             } catch (_: android.content.ActivityNotFoundException) {
-                // App not installed / doesn't match — fall through.
+                // App not installed / doesn't claim this URL — fall through
+                // to the browser (NOT the generic OS resolver, which on some
+                // phones is grabbed by an unrelated app like My O2).
             }
         }
+        openInBrowser(uri)
+    }
+
+    /**
+     * Open a URL in the device's default browser, targeting the browser
+     * package explicitly so Android's link-handling doesn't route it to
+     * some unrelated app that registered itself as a handler.
+     */
+    private fun openInBrowser(uri: android.net.Uri) {
+        val intent = Intent(Intent.ACTION_VIEW, uri).apply {
+            addCategory(Intent.CATEGORY_BROWSABLE)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        resolveDefaultBrowser()?.let { intent.setPackage(it) }
         try {
-            startActivity(
-                Intent(Intent.ACTION_VIEW, uri)
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            )
+            startActivity(intent)
         } catch (_: Exception) {
-            webView.loadUrl(uri.toString())
+            try {
+                startActivity(
+                    Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                )
+            } catch (_: Exception) {
+                webView.loadUrl(uri.toString())
+            }
+        }
+    }
+
+    /** The default browser's package, or null if it can't be resolved. */
+    private fun resolveDefaultBrowser(): String? {
+        return try {
+            val probe = Intent(Intent.ACTION_VIEW, android.net.Uri.parse("http://example.com"))
+                .addCategory(Intent.CATEGORY_BROWSABLE)
+            val ri = packageManager.resolveActivity(probe, PackageManager.MATCH_DEFAULT_ONLY)
+            val p = ri?.activityInfo?.packageName
+            if (p == null || p == "android") null else p
+        } catch (_: Exception) {
+            null
         }
     }
 
