@@ -162,31 +162,56 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Open a tapped marketplace listing the same way Chrome does: fire a
-     * plain BROWSABLE ACTION_VIEW and let Android's App Links resolve it
-     * to the right handler — the native app when one is installed and
-     * verified for that domain (Vinted / eBay / Gumtree / Facebook), else
-     * the default browser.
+     * Open a tapped marketplace listing in its real native app, actively
+     * skipping browsers AND link-hijackers like the My O2 app.
      *
-     * We deliberately do NOT name specific app packages. Guessing package
-     * names was the bug: a wrong or uninstalled package threw, and the
-     * fallback let the OS pick a handler — which on Mat's phone is grabbed
-     * by the My O2 app. CATEGORY_BROWSABLE restricts resolution to web-link
-     * handlers (verified apps + browsers), so unrelated apps can't hijack
-     * it, exactly mirroring how tapping the link in the browser behaves.
+     * The trick: the Vinted / eBay / Gumtree / Facebook apps each register
+     * for their OWN domain, whereas browsers and broad hijackers (My O2)
+     * register for generic web links. So we take everything that can handle
+     * THIS listing URL and subtract everything that can handle a generic
+     * http URL — what's left is the genuine domain-specific app. Launch it
+     * explicitly. If there's no such app, load the page in our own WebView
+     * so an unrelated app can never grab the tap.
      */
     private fun openExternal(uri: android.net.Uri) {
-        try {
-            startActivity(
-                Intent(Intent.ACTION_VIEW, uri).apply {
-                    addCategory(Intent.CATEGORY_BROWSABLE)
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-            )
+        val appPkg = dedicatedAppFor(uri)
+        if (appPkg != null) {
+            try {
+                startActivity(
+                    Intent(Intent.ACTION_VIEW, uri)
+                        .setPackage(appPkg)
+                        .addCategory(Intent.CATEGORY_BROWSABLE)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                )
+                return
+            } catch (_: Exception) {
+                // Fall through to the in-app WebView.
+            }
+        }
+        webView.loadUrl(uri.toString())
+    }
+
+    /**
+     * The package of the app that specifically claims this URL's domain
+     * (Vinted/eBay/Gumtree/Facebook), or null if only browsers / generic
+     * link-handlers (e.g. My O2) can take it. Never throws.
+     */
+    private fun dedicatedAppFor(uri: android.net.Uri): String? {
+        return try {
+            val pm = packageManager
+            fun handlerPkgs(u: android.net.Uri): Set<String> =
+                pm.queryIntentActivities(
+                    Intent(Intent.ACTION_VIEW, u).addCategory(Intent.CATEGORY_BROWSABLE),
+                    PackageManager.MATCH_ALL
+                ).map { it.activityInfo.packageName }.toSet()
+
+            // Handlers for the specific listing URL, minus handlers for a
+            // generic URL (= browsers + broad hijackers like My O2).
+            val specific = handlerPkgs(uri)
+            val generic = handlerPkgs(android.net.Uri.parse("http://example.com"))
+            (specific - generic).firstOrNull { it != packageName }
         } catch (_: Exception) {
-            // Nothing could handle it — keep the user in-app rather than
-            // dead-ending on the tap.
-            webView.loadUrl(uri.toString())
+            null
         }
     }
 
