@@ -9,10 +9,13 @@
     <!-- Notification permission is runtime-requested on Android 13+ -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
-    <!-- Android 11+ package visibility: without this, launching the
-         marketplace apps by package (Vinted / eBay / Facebook / Gumtree)
-         from a tapped listing can fail even when they're installed.
-         Declaring the https VIEW intent makes those handlers visible. -->
+    <!-- Full package visibility (Android 11+). Needed so we can detect
+         which installed app owns a marketplace domain and launch it,
+         bypassing link-hijackers like the My O2 app. This is a sideloaded
+         personal app (not on Play), so the broad permission is fine and
+         the narrower <queries> approach proved too limited (queries came
+         back empty, breaking all four apps). -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
     <queries>
         <intent>
             <action android:name="android.intent.action.VIEW" />

@@ -165,48 +165,78 @@ class MainActivity : AppCompatActivity() {
      * Open a tapped marketplace listing in its real native app, actively
      * skipping browsers AND link-hijackers like the My O2 app.
      *
-     * The trick: the Vinted / eBay / Gumtree / Facebook apps each register
-     * for their OWN domain, whereas browsers and broad hijackers (My O2)
-     * register for generic web links. So we take everything that can handle
-     * THIS listing URL and subtract everything that can handle a generic
-     * http URL — what's left is the genuine domain-specific app. Launch it
-     * explicitly. If there's no such app, load the page in our own WebView
-     * so an unrelated app can never grab the tap.
+     * Order of attempts:
+     *  1. The app that specifically owns this domain (Vinted/eBay/Gumtree/
+     *     Facebook), found by elimination via dedicatedAppFor().
+     *  2. A real browser, launched explicitly by package — so a generic
+     *     hijacker (My O2) can never be picked as the default handler.
+     *  3. The in-app WebView, so a tap can never dead-end.
+     *
+     * Needs the QUERY_ALL_PACKAGES permission (declared in the manifest)
+     * so the package queries actually see the installed apps on Android
+     * 11+ — without it the queries come back empty and nothing resolves.
      */
     private fun openExternal(uri: android.net.Uri) {
-        val appPkg = dedicatedAppFor(uri)
-        if (appPkg != null) {
-            try {
-                startActivity(
-                    Intent(Intent.ACTION_VIEW, uri)
-                        .setPackage(appPkg)
-                        .addCategory(Intent.CATEGORY_BROWSABLE)
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                )
-                return
-            } catch (_: Exception) {
-                // Fall through to the in-app WebView.
-            }
-        }
+        // 1. Detected domain-owning app (no hardcoded names).
+        dedicatedAppFor(uri)?.let { if (launchIn(it, uri)) return }
+        // 2. Belt-and-suspenders: well-known marketplace packages, if the
+        //    detection missed for any reason.
+        firstInstalled(knownAppsFor(uri))?.let { if (launchIn(it, uri)) return }
+        // 3. A real browser, explicitly (never the O2 hijacker).
+        firstInstalled(BROWSERS)?.let { if (launchIn(it, uri)) return }
+        // 4. In-app WebView so a tap never dead-ends.
         webView.loadUrl(uri.toString())
     }
+
+    /** Well-known package names per marketplace host (fallback hints). */
+    private fun knownAppsFor(uri: android.net.Uri): List<String> {
+        val h = uri.host ?: ""
+        return when {
+            h.contains("vinted")   -> listOf("com.vinted")
+            h.contains("ebay")     -> listOf("com.ebay.mobile")
+            h.contains("gumtree")  -> listOf("com.gumtree.android")
+            h.contains("facebook") || h.contains("fb.") ->
+                listOf("com.facebook.katana", "com.facebook.lite")
+            else -> emptyList()
+        }
+    }
+
+    /** Launch [uri] explicitly in [pkg]; true on success. Never throws.
+     *  BROWSABLE is added so app-link activities (declared DEFAULT+BROWSABLE)
+     *  match the same way they did when dedicatedAppFor() detected them. */
+    private fun launchIn(pkg: String, uri: android.net.Uri): Boolean = try {
+        startActivity(
+            Intent(Intent.ACTION_VIEW, uri)
+                .setPackage(pkg)
+                .addCategory(Intent.CATEGORY_BROWSABLE)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        )
+        true
+    } catch (_: Exception) {
+        false
+    }
+
+    private fun isInstalled(pkg: String): Boolean = try {
+        packageManager.getPackageInfo(pkg, 0); true
+    } catch (_: Exception) {
+        false
+    }
+
+    private fun firstInstalled(pkgs: List<String>): String? =
+        pkgs.firstOrNull { isInstalled(it) }
 
     /**
      * The package of the app that specifically claims this URL's domain
      * (Vinted/eBay/Gumtree/Facebook), or null if only browsers / generic
-     * link-handlers (e.g. My O2) can take it. Never throws.
+     * link-handlers (e.g. My O2) can take it.
+     *
+     * Method: everything that can open THIS listing URL, minus everything
+     * that can open a generic http URL (= browsers + broad hijackers like
+     * My O2). The remainder is the genuine domain-specific app — no
+     * hardcoded package names, so a renamed/unknown app still resolves.
      */
     private fun dedicatedAppFor(uri: android.net.Uri): String? {
         return try {
-            val pm = packageManager
-            fun handlerPkgs(u: android.net.Uri): Set<String> =
-                pm.queryIntentActivities(
-                    Intent(Intent.ACTION_VIEW, u).addCategory(Intent.CATEGORY_BROWSABLE),
-                    PackageManager.MATCH_ALL
-                ).map { it.activityInfo.packageName }.toSet()
-
-            // Handlers for the specific listing URL, minus handlers for a
-            // generic URL (= browsers + broad hijackers like My O2).
             val specific = handlerPkgs(uri)
             val generic = handlerPkgs(android.net.Uri.parse("http://example.com"))
             (specific - generic).firstOrNull { it != packageName }
@@ -214,6 +244,12 @@ class MainActivity : AppCompatActivity() {
             null
         }
     }
+
+    private fun handlerPkgs(u: android.net.Uri): Set<String> =
+        packageManager.queryIntentActivities(
+            Intent(Intent.ACTION_VIEW, u).addCategory(Intent.CATEGORY_BROWSABLE),
+            PackageManager.MATCH_ALL
+        ).map { it.activityInfo.packageName }.toSet()
 
     private fun startMonitorService() {
         val svc = Intent(this, WebSocketService::class.java)
@@ -240,5 +276,17 @@ class MainActivity : AppCompatActivity() {
         private const val PI_HOST = "81.96.120.250"
         // The Pi-hosted Flask UI.
         private const val WEB_UI_URL = "http://$PI_HOST:5000/"
+        // Real browsers to fall back to, launched explicitly by package so
+        // a generic link-hijacker (My O2) is never picked. First installed
+        // wins; order = most common first.
+        private val BROWSERS = listOf(
+            "com.android.chrome",
+            "com.sec.android.app.sbrowser",   // Samsung Internet
+            "org.mozilla.firefox",
+            "com.microsoft.emmx",             // Edge
+            "com.brave.browser",
+            "com.opera.browser",
+            "com.duckduckgo.mobile.android",
+        )
     }
 }
