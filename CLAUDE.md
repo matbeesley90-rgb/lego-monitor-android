@@ -43,9 +43,9 @@ Then send the APK to Mat with the SendUserFile tool (display: attach). He instal
 
 ## Current state (2026-07-20)
 
-- Latest build: **v15**, commit `911e232` on `claude/price-in-title` — **awaiting Mat's on-device test.**
-- Expected behaviour when tapping a listing: Vinted → Vinted app, eBay → eBay app, Facebook → FB app, **Gumtree → Gumtree app directly** (no browser bounce). **My O2 must never open.**
-- v15 Gumtree fact (from decoding the Gumtree APK's own manifest, July-2026 version): `com.gumtree.android`'s MainActivity filters `https://www.gumtree.com` with `pathPattern /p/.*` — the monitor's listing URLs match. It's absent from the OS resolver only because App Links *verification* fails on Mat's phone; an explicit `setPackage` launch needs no verification. The old "direct https launch dead-ends on an error page" note was wrong for current listing URLs (likely an expired ad or older app version). If v15's Gumtree tap opens the app on an error screen, that theory failed — revert to the v14 browser-bounce flow (`git show 085dc95 -- app/src/main/java/com/lego/monitor/MainActivity.kt`) or try the app's Adjust scheme `gumtree://link` next.
+- Latest build: **v15**, commit `911e232` on `claude/price-in-title` — **CONFIRMED WORKING on-device by Mat (2026-07-20): all four marketplaces open their native apps**, Gumtree directly with no browser bounce. Do not change the linking code without a new failure report.
+- Behaviour when tapping a listing: Vinted → Vinted app, eBay → eBay app, Facebook → FB app, Gumtree → Gumtree app. **My O2 must never open.**
+- v15 Gumtree fact (from decoding the Gumtree APK's own manifest, July-2026 version): `com.gumtree.android`'s MainActivity filters `https://www.gumtree.com` with `pathPattern /p/.*` — the monitor's listing URLs match. It's absent from the OS resolver only because App Links *verification* fails on Mat's phone; an explicit `setPackage` launch needs no verification. The old "direct https launch dead-ends on an error page" note was wrong for current listing URLs (likely an expired ad or older app version) — v15 confirmed the direct launch works on-device.
 - If Mat reports a failure, get it as "[marketplace] → [what opened]" and read `MainActivity.openExternal()` + the memory file `android-marketplace-linking` before changing ANYTHING — the linking design encodes hard-won on-device facts:
   - The **My O2 app** is registered as the verified handler for marketplace domains on Mat's phone — never let the OS resolve a link (no implicit ACTION_VIEW, no queryIntentActivities-based picking).
   - **No CATEGORY_BROWSABLE on explicit-package launches** (it makes matching stricter and broke Vinted once).
@@ -78,6 +78,5 @@ Notification sizes/colours come from the `style` JSON in each V4 payload — con
 
 ## Open items (as of session close)
 
-1. **v14 test pending** — Mat to confirm where the four marketplaces open.
-2. Branch `claude/price-in-title` unmerged — needs Mat's go-ahead, then the push-to-main build produces the "official" APK.
+1. Branch `claude/price-in-title` unmerged — needs Mat's go-ahead, then the push-to-main build produces the "official" APK. v15 is confirmed good, so it's ready to merge whenever he says so.
 3. Backend extras Mat hasn't decided on: eBay price auto-refresh (sw_sets prices freeze after one pass), false-positive content check in the daily notif review (`~/lego-monitor/daily_notif_review.py`, Pi cron at noon).
