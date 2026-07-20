@@ -245,7 +245,12 @@ class MainActivity : AppCompatActivity() {
     private fun knownAppsFor(uri: android.net.Uri): List<String> {
         val h = uri.host ?: ""
         return when {
-            h.contains("vinted")   -> listOf("com.vinted")
+            // Two distinct Vinted apps exist: fr.vinted is the main
+            // international app whose manifest lists www.vinted.co.uk (and
+            // every other EU domain); com.vinted is the separate US app and
+            // handles ONLY www.vinted.com — it's not what a UK user has
+            // installed. Try the international app first.
+            h.contains("vinted")   -> listOf("fr.vinted", "com.vinted")
             h.contains("ebay")     -> listOf("com.ebay.mobile")
             h.contains("gumtree")  -> listOf("com.gumtree.android")
             h.contains("facebook") || h.contains("fb.") ->
