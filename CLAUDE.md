@@ -43,7 +43,7 @@ Then send the APK to Mat with the SendUserFile tool (display: attach). He instal
 
 ## Current state (2026-07-20)
 
-- Latest build: **v15**, commit `911e232` on `claude/price-in-title` — **CONFIRMED WORKING on-device by Mat (2026-07-20): all four marketplaces open their native apps**, Gumtree directly with no browser bounce. Do not change the linking code without a new failure report.
+- Latest build: **v16**, commit `c42a045` on `claude/price-in-title` — v15 test result: Gumtree/eBay/FB → native apps ✓, Vinted → browser ✗. v16 fixes Vinted: the UK app is **`fr.vinted`** (its manifest lists `www.vinted.co.uk`); `com.vinted` is the separate US-only app and was never installed. **Awaiting Mat's v16 Vinted re-test.** Do not change the linking code without a new failure report.
 - Behaviour when tapping a listing: Vinted → Vinted app, eBay → eBay app, Facebook → FB app, Gumtree → Gumtree app. **My O2 must never open.**
 - v15 Gumtree fact (from decoding the Gumtree APK's own manifest, July-2026 version): `com.gumtree.android`'s MainActivity filters `https://www.gumtree.com` with `pathPattern /p/.*` — the monitor's listing URLs match. It's absent from the OS resolver only because App Links *verification* fails on Mat's phone; an explicit `setPackage` launch needs no verification. The old "direct https launch dead-ends on an error page" note was wrong for current listing URLs (likely an expired ad or older app version) — v15 confirmed the direct launch works on-device.
 - If Mat reports a failure, get it as "[marketplace] → [what opened]" and read `MainActivity.openExternal()` + the memory file `android-marketplace-linking` before changing ANYTHING — the linking design encodes hard-won on-device facts:
