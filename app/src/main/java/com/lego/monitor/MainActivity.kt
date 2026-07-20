@@ -189,15 +189,16 @@ class MainActivity : AppCompatActivity() {
             handleIntentUri(uri)
             return
         }
-        val host = uri.host ?: ""
-        // Gumtree: its app takes listings ONLY via the site's own intent://
-        // redirect (the path Chrome takes) — a direct https launch dead-ends
-        // on an in-app error page. So route Gumtree through the page flow;
-        // its intent:// redirect then opens the Gumtree app properly.
-        if (!host.contains("gumtree")) {
-            for (pkg in knownAppsFor(uri)) {
-                if (isInstalled(pkg) && launchIn(pkg, uri)) return
-            }
+        // Gumtree note: the app never shows in the OS resolver because its
+        // App Links verification fails on this phone, but its manifest
+        // (checked against the July-2026 APK) matches
+        // https://www.gumtree.com pathPattern /p/.* — i.e. exactly the
+        // monitor's listing URLs — so an explicit setPackage launch works
+        // without verification. A URL the filter doesn't cover throws
+        // ActivityNotFoundException in launchIn and falls through to the
+        // browser, so the direct attempt is safe for every marketplace.
+        for (pkg in knownAppsFor(uri)) {
+            if (isInstalled(pkg) && launchIn(pkg, uri)) return
         }
         firstInstalled(BROWSERS)?.let { if (launchIn(it, uri)) return }
         webView.loadUrl(uri.toString())
