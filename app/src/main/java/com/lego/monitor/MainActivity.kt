@@ -177,41 +177,24 @@ class MainActivity : AppCompatActivity() {
      * 11+ — without it the queries come back empty and nothing resolves.
      */
     private fun openExternal(uri: android.net.Uri) {
-        // ── DIAGNOSTIC BUILD ──────────────────────────────────────────
-        // Surface exactly what THIS phone resolves for the tapped URL so we
-        // can see why My O2 keeps winning for Gumtree. Screenshot the popup.
-        // (Reverted to silent auto-open once confirmed.)
-        val specific = handlerPkgs(uri).sorted()
-        val generic = handlerPkgs(android.net.Uri.parse("http://example.com")).sorted()
-        val dedicated = (specific.toSet() - generic.toSet()).firstOrNull { it != packageName }
-        val known = knownAppsFor(uri)
-        val knownInstalled = known.filter { isInstalled(it) }
-        val browser = firstInstalled(BROWSERS)
-        val willPick = dedicated ?: knownInstalled.firstOrNull() ?: browser ?: "(in-app webview)"
-
-        val msg = buildString {
-            append("host: ${uri.host}\n\n")
-            append("▶ WILL OPEN: $willPick\n\n")
-            append("dedicated pick: ${dedicated ?: "none"}\n")
-            append("known: ${known.joinToString().ifEmpty { "none" }}\n")
-            append("  installed: ${knownInstalled.joinToString().ifEmpty { "none" }}\n")
-            append("browser: ${browser ?: "none"}\n\n")
-            append("── apps that can open THIS url (${specific.size}) ──\n")
-            append(specific.joinToString("\n").ifEmpty { "(none!)" })
-            append("\n\n── apps that can open a generic url (${generic.size}) ──\n")
-            append(generic.joinToString("\n").ifEmpty { "(none!)" })
+        // Open a listing WITHOUT ever letting the OS pick a default handler.
+        // On Mat's phone the My O2 app has registered itself as the (only,
+        // verified) handler for these marketplace domains, so any implicit
+        // resolve — or the "subtract the generic handlers" trick — gets
+        // hijacked by O2. Instead:
+        //   1. Try the marketplace's own app by exact package. O2 is never
+        //      in this list, so it can't win. If the app is installed AND
+        //      claims the URL (eBay/Vinted/FB do), it opens; if it doesn't
+        //      (Gumtree's app doesn't register for gumtree.com links),
+        //      launchIn throws and we fall through.
+        //   2. A real browser, launched explicitly by package — again O2 is
+        //      not a browser, so it's excluded.
+        //   3. In-app WebView so a tap never dead-ends.
+        for (pkg in knownAppsFor(uri)) {
+            if (isInstalled(pkg) && launchIn(pkg, uri)) return
         }
-        androidx.appcompat.app.AlertDialog.Builder(this)
-            .setTitle("Open debug — screenshot this")
-            .setMessage(msg)
-            .setPositiveButton("Open") { _, _ ->
-                if (dedicated != null && launchIn(dedicated, uri)) return@setPositiveButton
-                if (knownInstalled.isNotEmpty() && launchIn(knownInstalled.first(), uri)) return@setPositiveButton
-                if (browser != null && launchIn(browser, uri)) return@setPositiveButton
-                webView.loadUrl(uri.toString())
-            }
-            .setNegativeButton("Cancel", null)
-            .show()
+        firstInstalled(BROWSERS)?.let { if (launchIn(it, uri)) return }
+        webView.loadUrl(uri.toString())
     }
 
     /** Well-known package names per marketplace host (fallback hints). */
@@ -250,12 +233,6 @@ class MainActivity : AppCompatActivity() {
 
     private fun firstInstalled(pkgs: List<String>): String? =
         pkgs.firstOrNull { isInstalled(it) }
-
-    private fun handlerPkgs(u: android.net.Uri): Set<String> =
-        packageManager.queryIntentActivities(
-            Intent(Intent.ACTION_VIEW, u).addCategory(Intent.CATEGORY_BROWSABLE),
-            PackageManager.MATCH_ALL
-        ).map { it.activityInfo.packageName }.toSet()
 
     private fun startMonitorService() {
         val svc = Intent(this, WebSocketService::class.java)
