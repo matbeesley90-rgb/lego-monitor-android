@@ -36,10 +36,11 @@ rid=$(GH_TOKEN="$GH_TOKEN" gh run list --workflow build.yml --branch claude/pric
 aid=$(GH_TOKEN="$GH_TOKEN" gh api repos/matbeesley90-rgb/lego-monitor-android/actions/runs/$rid/artifacts -q '.artifacts[0].id')
 GH_TOKEN="$GH_TOKEN" gh api repos/matbeesley90-rgb/lego-monitor-android/actions/artifacts/$aid/zip > /tmp/apk.zip
 unzip -o /tmp/apk.zip   # -> app-debug.apk
+~/.lego-monitor-signing/resign.sh app-debug.apk   # MANDATORY — see Signing
 ```
 Then send the APK to Mat with the SendUserFile tool (display: attach). He installs it directly.
 
-**Signing:** the workflow caches ONE debug keystore (cache key `debug-keystore-v1`) so every build signs identically and installs over the top. If Mat ever gets "App not installed", the cache was lost/changed → he must uninstall once, then it's stable again. Do not remove that workflow step.
+**Signing (fixed 2026-07-20 after v16):** CI signs every build with a FRESH throwaway key — the workflow's keystore-cache step restores `~/.android/debug.keystore` but AGP on the runner provably doesn't use it (v14/v15/v16 artifacts all had different certs; the "stable key" belief was wrong, over-the-top installs only ever worked after an uninstall). The real fix is Pi-side: **always run `~/.lego-monitor-signing/resign.sh <apk>` on the downloaded artifact before sending it to Mat.** It re-signs with the permanent keystore at `~/.lego-monitor-signing/debug.keystore` (PKCS12, pass `android`, alias `androiddebugkey`, cert SHA-256 `55974c6d…`) using a local JRE + apksigner in the same dir. That keystore is the ONLY key that matters — never delete `~/.lego-monitor-signing/`, never commit it (public repo). Skipping the resign step = Mat gets "App not installed".
 
 ## Current state (2026-07-20)
 
