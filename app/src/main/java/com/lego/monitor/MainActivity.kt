@@ -177,24 +177,67 @@ class MainActivity : AppCompatActivity() {
      * 11+ — without it the queries come back empty and nothing resolves.
      */
     private fun openExternal(uri: android.net.Uri) {
-        // Open a listing WITHOUT ever letting the OS pick a default handler.
-        // On Mat's phone the My O2 app has registered itself as the (only,
-        // verified) handler for these marketplace domains, so any implicit
-        // resolve — or the "subtract the generic handlers" trick — gets
-        // hijacked by O2. Instead:
-        //   1. Try the marketplace's own app by exact package. O2 is never
-        //      in this list, so it can't win. If the app is installed AND
-        //      claims the URL (eBay/Vinted/FB do), it opens; if it doesn't
-        //      (Gumtree's app doesn't register for gumtree.com links),
-        //      launchIn throws and we fall through.
-        //   2. A real browser, launched explicitly by package — again O2 is
-        //      not a browser, so it's excluded.
-        //   3. In-app WebView so a tap never dead-ends.
-        for (pkg in knownAppsFor(uri)) {
-            if (isInstalled(pkg) && launchIn(pkg, uri)) return
+        // Open a listing WITHOUT ever letting the OS pick a default handler
+        // (the My O2 app has registered itself as the verified handler for
+        // marketplace domains on Mat's phone and hijacks any implicit
+        // resolve). O2 is neither a known marketplace app nor a browser, so
+        // it is structurally excluded from every path below.
+        val scheme = uri.scheme ?: ""
+        if (scheme != "http" && scheme != "https") {
+            // e.g. the intent:// app-redirect a marketplace page fires —
+            // handle it like Chrome does instead of erroring.
+            handleIntentUri(uri)
+            return
+        }
+        val host = uri.host ?: ""
+        // Gumtree: its app takes listings ONLY via the site's own intent://
+        // redirect (the path Chrome takes) — a direct https launch dead-ends
+        // on an in-app error page. So route Gumtree through the page flow;
+        // its intent:// redirect then opens the Gumtree app properly.
+        if (!host.contains("gumtree")) {
+            for (pkg in knownAppsFor(uri)) {
+                if (isInstalled(pkg) && launchIn(pkg, uri)) return
+            }
         }
         firstInstalled(BROWSERS)?.let { if (launchIn(it, uri)) return }
         webView.loadUrl(uri.toString())
+    }
+
+    /**
+     * Handle an intent:// (or other non-http) URL the way Chrome does:
+     * parse it, launch the app it names (the URI carries the package, e.g.
+     * com.gumtree.android — this is exactly how the Gumtree site opens its
+     * app), and if that app isn't available fall back to the URL the page
+     * supplied in S.browser_fallback_url. Never load a non-http scheme into
+     * the WebView (that's the ERR_UNKNOWN_URL_SCHEME dead-end).
+     */
+    private fun handleIntentUri(uri: android.net.Uri) {
+        val parsed = try {
+            Intent.parseUri(uri.toString(), Intent.URI_INTENT_SCHEME)
+        } catch (_: Exception) {
+            null
+        } ?: return
+        try {
+            parsed.addCategory(Intent.CATEGORY_BROWSABLE) // mirror Chrome
+            parsed.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            parsed.component = null
+            parsed.selector = null
+            startActivity(parsed)
+            return
+        } catch (_: Exception) {
+            // App named by the intent isn't available — use the fallback.
+        }
+        val fallback = try {
+            parsed.getStringExtra("browser_fallback_url")
+        } catch (_: Exception) {
+            null
+        }
+        if (!fallback.isNullOrBlank()) {
+            val fbUri = android.net.Uri.parse(fallback)
+            if (fbUri.scheme == "http" || fbUri.scheme == "https") {
+                openExternal(fbUri)
+            }
+        }
     }
 
     /** Well-known package names per marketplace host (fallback hints). */
@@ -211,13 +254,15 @@ class MainActivity : AppCompatActivity() {
     }
 
     /** Launch [uri] explicitly in [pkg]; true on success. Never throws.
-     *  BROWSABLE is added so app-link activities (declared DEFAULT+BROWSABLE)
-     *  match the same way they did when dedicatedAppFor() detected them. */
+     *  Deliberately NO extra categories: an intent's categories must all be
+     *  declared by the target's filter, so adding BROWSABLE made the match
+     *  STRICTER and broke apps whose link activity doesn't declare it
+     *  (that was the v13 Vinted-opens-a-browser regression). Plain
+     *  ACTION_VIEW+DEFAULT is the most permissive explicit launch. */
     private fun launchIn(pkg: String, uri: android.net.Uri): Boolean = try {
         startActivity(
             Intent(Intent.ACTION_VIEW, uri)
                 .setPackage(pkg)
-                .addCategory(Intent.CATEGORY_BROWSABLE)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         )
         true
