@@ -177,15 +177,41 @@ class MainActivity : AppCompatActivity() {
      * 11+ — without it the queries come back empty and nothing resolves.
      */
     private fun openExternal(uri: android.net.Uri) {
-        // 1. Detected domain-owning app (no hardcoded names).
-        dedicatedAppFor(uri)?.let { if (launchIn(it, uri)) return }
-        // 2. Belt-and-suspenders: well-known marketplace packages, if the
-        //    detection missed for any reason.
-        firstInstalled(knownAppsFor(uri))?.let { if (launchIn(it, uri)) return }
-        // 3. A real browser, explicitly (never the O2 hijacker).
-        firstInstalled(BROWSERS)?.let { if (launchIn(it, uri)) return }
-        // 4. In-app WebView so a tap never dead-ends.
-        webView.loadUrl(uri.toString())
+        // ── DIAGNOSTIC BUILD ──────────────────────────────────────────
+        // Surface exactly what THIS phone resolves for the tapped URL so we
+        // can see why My O2 keeps winning for Gumtree. Screenshot the popup.
+        // (Reverted to silent auto-open once confirmed.)
+        val specific = handlerPkgs(uri).sorted()
+        val generic = handlerPkgs(android.net.Uri.parse("http://example.com")).sorted()
+        val dedicated = (specific.toSet() - generic.toSet()).firstOrNull { it != packageName }
+        val known = knownAppsFor(uri)
+        val knownInstalled = known.filter { isInstalled(it) }
+        val browser = firstInstalled(BROWSERS)
+        val willPick = dedicated ?: knownInstalled.firstOrNull() ?: browser ?: "(in-app webview)"
+
+        val msg = buildString {
+            append("host: ${uri.host}\n\n")
+            append("▶ WILL OPEN: $willPick\n\n")
+            append("dedicated pick: ${dedicated ?: "none"}\n")
+            append("known: ${known.joinToString().ifEmpty { "none" }}\n")
+            append("  installed: ${knownInstalled.joinToString().ifEmpty { "none" }}\n")
+            append("browser: ${browser ?: "none"}\n\n")
+            append("── apps that can open THIS url (${specific.size}) ──\n")
+            append(specific.joinToString("\n").ifEmpty { "(none!)" })
+            append("\n\n── apps that can open a generic url (${generic.size}) ──\n")
+            append(generic.joinToString("\n").ifEmpty { "(none!)" })
+        }
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("Open debug — screenshot this")
+            .setMessage(msg)
+            .setPositiveButton("Open") { _, _ ->
+                if (dedicated != null && launchIn(dedicated, uri)) return@setPositiveButton
+                if (knownInstalled.isNotEmpty() && launchIn(knownInstalled.first(), uri)) return@setPositiveButton
+                if (browser != null && launchIn(browser, uri)) return@setPositiveButton
+                webView.loadUrl(uri.toString())
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     /** Well-known package names per marketplace host (fallback hints). */
@@ -224,26 +250,6 @@ class MainActivity : AppCompatActivity() {
 
     private fun firstInstalled(pkgs: List<String>): String? =
         pkgs.firstOrNull { isInstalled(it) }
-
-    /**
-     * The package of the app that specifically claims this URL's domain
-     * (Vinted/eBay/Gumtree/Facebook), or null if only browsers / generic
-     * link-handlers (e.g. My O2) can take it.
-     *
-     * Method: everything that can open THIS listing URL, minus everything
-     * that can open a generic http URL (= browsers + broad hijackers like
-     * My O2). The remainder is the genuine domain-specific app — no
-     * hardcoded package names, so a renamed/unknown app still resolves.
-     */
-    private fun dedicatedAppFor(uri: android.net.Uri): String? {
-        return try {
-            val specific = handlerPkgs(uri)
-            val generic = handlerPkgs(android.net.Uri.parse("http://example.com"))
-            (specific - generic).firstOrNull { it != packageName }
-        } catch (_: Exception) {
-            null
-        }
-    }
 
     private fun handlerPkgs(u: android.net.Uri): Set<String> =
         packageManager.queryIntentActivities(
