@@ -6,9 +6,11 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.view.View
+import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
@@ -63,6 +65,31 @@ class MainActivity : AppCompatActivity() {
         // Result ignored — start the service either way; the WebView UI
         // works regardless of whether POST_NOTIFICATIONS was granted.
         startMonitorService()
+    }
+
+    // ── WebView <input type=file> support ─────────────────────────────
+    // The default WebChromeClient does NOT open a file picker, so the
+    // Appraise-photo upload silently did nothing. We hold the page's
+    // callback and hand it the chosen image URI(s) from the system picker.
+    private var filePathCallback: ValueCallback<Array<Uri>>? = null
+
+    private val fileChooserLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val cb = filePathCallback
+        filePathCallback = null
+        if (cb == null) return@registerForActivityResult
+        val data = result.data
+        val uris: Array<Uri>? = when {
+            result.resultCode != RESULT_OK || data == null -> null
+            data.clipData != null -> {
+                val cd = data.clipData!!
+                Array(cd.itemCount) { cd.getItemAt(it).uri }
+            }
+            data.data != null -> arrayOf(data.data!!)
+            else -> null
+        }
+        cb.onReceiveValue(uris ?: arrayOf())
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -157,7 +184,35 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
-        webView.webChromeClient = WebChromeClient()
+        webView.webChromeClient = object : WebChromeClient() {
+            override fun onShowFileChooser(
+                view: WebView?,
+                callback: ValueCallback<Array<Uri>>?,
+                params: FileChooserParams?
+            ): Boolean {
+                // Cancel any previous pending chooser so its callback isn't
+                // left dangling (WebView contract: exactly one active).
+                filePathCallback?.onReceiveValue(null)
+                filePathCallback = callback
+                val intent = params?.createIntent()
+                    ?: Intent(Intent.ACTION_GET_CONTENT).apply {
+                        type = "image/*"
+                        addCategory(Intent.CATEGORY_OPENABLE)
+                    }
+                // Honour the page's `multiple` attribute so several photos
+                // can be picked in one go.
+                if (params?.mode == FileChooserParams.MODE_OPEN_MULTIPLE) {
+                    intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+                }
+                return try {
+                    fileChooserLauncher.launch(intent)
+                    true
+                } catch (e: Exception) {
+                    filePathCallback = null
+                    false
+                }
+            }
+        }
         webView.loadUrl(WEB_UI_URL)
     }
 
