@@ -143,6 +143,9 @@ object V4NotificationRenderer {
                     "setBackgroundColor", tier.bannerColor)
                 collapsed.setViewVisibility(R.id.notif_collapsed_top_stripe, View.GONE)
             }
+            // Tier deals keep their own text-icon; the leading footer head
+            // is a bundle-only element.
+            expanded.setViewVisibility(R.id.notif_footer_head, View.GONE)
             val footerParts = tier.footerParts
             if (footerParts != null) {
                 // Multi-colour render: fig_sum in asking-blue, pct +
@@ -150,14 +153,14 @@ object V4NotificationRenderer {
                 // muted grey. Colours pulled from the same V4Style
                 // block the price grid uses, so a tweak in the
                 // Settings panel propagates.
-                expanded.setViewVisibility(R.id.notif_footer, View.VISIBLE)
+                expanded.setViewVisibility(R.id.notif_footer_row, View.VISIBLE)
                 expanded.setTextViewText(R.id.notif_footer,
                     tierFooterSpannable(footerParts, s))
             } else if (tier.footer.isNotBlank()) {
-                expanded.setViewVisibility(R.id.notif_footer, View.VISIBLE)
+                expanded.setViewVisibility(R.id.notif_footer_row, View.VISIBLE)
                 expanded.setTextViewText(R.id.notif_footer, tier.footer)
             } else {
-                expanded.setViewVisibility(R.id.notif_footer, View.GONE)
+                expanded.setViewVisibility(R.id.notif_footer_row, View.GONE)
             }
         } else {
             expanded.setViewVisibility(R.id.notif_banner, View.GONE)
@@ -165,13 +168,19 @@ object V4NotificationRenderer {
             collapsed.setViewVisibility(R.id.notif_collapsed_top_stripe, View.GONE)
             if (p.kind == "bundle" && p.bundleLine.isNotBlank()) {
                 // Bundles: no tier banner/stripe, but the footer slot
-                // carries the server-composed figs line ("8 figs •
-                // £1.01/fig" or the vision estimate) — the same
-                // position the profit line occupies on tiered deals.
-                expanded.setViewVisibility(R.id.notif_footer, View.VISIBLE)
+                // carries the server-composed figs line. A minifig head
+                // tinted to the top fig's value band leads it (replacing
+                // the old orange diamond); grey when no band applies.
+                expanded.setViewVisibility(R.id.notif_footer_row, View.VISIBLE)
                 expanded.setTextViewText(R.id.notif_footer, p.bundleLine)
+                expanded.setViewVisibility(R.id.notif_footer_head, View.VISIBLE)
+                val headTint = if (p.iconColor.isNotBlank()) {
+                    try { Color.parseColor(p.iconColor) }
+                    catch (_: Exception) { Color.parseColor("#8A8A95") }
+                } else Color.parseColor("#8A8A95")
+                expanded.setInt(R.id.notif_footer_head, "setColorFilter", headTint)
             } else {
-                expanded.setViewVisibility(R.id.notif_footer, View.GONE)
+                expanded.setViewVisibility(R.id.notif_footer_row, View.GONE)
             }
         }
 
@@ -258,8 +267,10 @@ object V4NotificationRenderer {
             for (rv in listOf(collapsed, expanded)) {
                 rv.setViewVisibility(R.id.notif_bundle_bricks, View.VISIBLE)
                 rv.setInt(R.id.notif_bundle_bricks, "setColorFilter", greyMarker)
-                rv.setViewVisibility(R.id.notif_fig_head, View.VISIBLE)
-                rv.setInt(R.id.notif_fig_head, "setColorFilter", greyMarker)
+                // Title-row head hidden for bundles now — the value-tinted
+                // head lives on the footer fig line (Mat, 2026-07-23), so a
+                // second grey head here would just be noise.
+                rv.setViewVisibility(R.id.notif_fig_head, View.GONE)
             }
         } else if (p.iconColor.isNotBlank()) {
             try {
