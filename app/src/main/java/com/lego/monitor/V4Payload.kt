@@ -52,6 +52,11 @@ data class V4Payload(
     // Max-fig-value band colour (hex) — tints the status-bar head to
     // match the monitor card border for the priciest fig in the set.
     val iconColor: String = "",
+
+    // Bundles only — per-token version of bundleLine so the renderer can
+    // colour total (blue), profit (green/red), rest (grey). Null → render
+    // the flat bundleLine.
+    val bundleParts: BundleParts? = null,
 ) {
     val isAuction: Boolean get() = kind == "auction"
 
@@ -89,10 +94,43 @@ data class V4Payload(
                     tier         = TierInfo.parse(o.optJSONObject("tier")),
                     bundleLine   = o.optString("bundle_line", ""),
                     iconColor    = o.optString("icon_color", ""),
+                    bundleParts  = BundleParts.parse(o.optJSONObject("bundle_parts")),
                 )
             } catch (_: Exception) {
                 null
             }
+        }
+    }
+}
+
+/**
+ * Per-token bundle footer — lets the renderer colour each piece:
+ *   [blue]{total}[/] • [grey]{figs}   {avg}[/] • [green|red]{pct} • {profit}[/] [amber]{warn}[/]
+ * `positive` picks green (profit) vs red (loss) for the pct+profit group.
+ */
+data class BundleParts(
+    val total: String,
+    val figs: String,
+    val avg: String,
+    val pct: String,
+    val profit: String,
+    val positive: Boolean,
+    val warn: String,
+) {
+    companion object {
+        fun parse(o: org.json.JSONObject?): BundleParts? {
+            if (o == null) return null
+            val total = o.optString("total", "")
+            if (total.isBlank()) return null
+            return BundleParts(
+                total    = total,
+                figs     = o.optString("figs", ""),
+                avg      = o.optString("avg", ""),
+                pct      = o.optString("pct", ""),
+                profit   = o.optString("profit", ""),
+                positive = o.optBoolean("positive", true),
+                warn     = o.optString("warn", ""),
+            )
         }
     }
 }

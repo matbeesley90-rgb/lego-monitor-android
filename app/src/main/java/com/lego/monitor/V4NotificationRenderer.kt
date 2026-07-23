@@ -172,7 +172,14 @@ object V4NotificationRenderer {
                 // tinted to the top fig's value band leads it (replacing
                 // the old orange diamond); grey when no band applies.
                 expanded.setViewVisibility(R.id.notif_footer_row, View.VISIBLE)
-                expanded.setTextViewText(R.id.notif_footer, p.bundleLine)
+                // Coloured per-token render when the payload carries parts
+                // (total blue, profit green/red, rest grey); flat text else.
+                if (p.bundleParts != null) {
+                    expanded.setTextViewText(R.id.notif_footer,
+                        bundleFooterSpannable(p.bundleParts, s))
+                } else {
+                    expanded.setTextViewText(R.id.notif_footer, p.bundleLine)
+                }
                 expanded.setViewVisibility(R.id.notif_footer_head, View.VISIBLE)
                 val headTint = if (p.iconColor.isNotBlank()) {
                     try { Color.parseColor(p.iconColor) }
@@ -417,6 +424,45 @@ object V4NotificationRenderer {
         rv.setTextViewText(idPrice, priceStr)
         rv.setTextViewText(idCellA, cellSpannable(labA, valA, p.trueCost, styleA))
         rv.setTextViewText(idCellB, cellSpannable(labB, valB, p.trueCost, styleB))
+    }
+
+    /** Bundle footer rendered as a SpannableString (Mat, 2026-07-23):
+     *   [blue bold]{total}[/] [grey] • {figs}   {avg} • [/]
+     *   [green|red bold]{pct} • {profit}[/] [amber] {warn}[/]
+     * Total in asking-blue; the pct+profit group in positive-green or
+     * negative-red per `positive`; a wide gap between fig-count and average;
+     * everything else muted grey. Colours track V4Style so a Settings tweak
+     * propagates. */
+    private fun bundleFooterSpannable(b: BundleParts, s: V4Style): CharSequence {
+        val grey  = Color.parseColor("#9AA0A6")
+        val blue  = s.askingColor
+        val money = if (b.positive) s.cellBN.pctPosColor else s.cellBN.pctNegColor
+        val amber = Color.parseColor("#E0A53B")
+        val bold  = android.graphics.Typeface.BOLD
+
+        val sb = SpannableStringBuilder()
+        fun run(text: String, color: Int, boldRun: Boolean = false) {
+            if (text.isEmpty()) return
+            val st = sb.length
+            sb.append(text)
+            sb.setSpan(ForegroundColorSpan(color), st, sb.length,
+                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            if (boldRun) sb.setSpan(StyleSpan(bold), st, sb.length,
+                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        }
+
+        run(b.total, blue, true)                 // £142  (blue, bold)
+        run(" • ", grey)
+        run(b.figs, grey)                        // 26 figs
+        run("   ", grey)                         // the requested gap
+        run(b.avg, grey)                         // x̄£5.5
+        run(" • ", grey)
+        run("${b.pct} • ${b.profit}", money, true)   // +103% • £72 (green/red)
+        if (b.warn.isNotBlank()) {
+            run("  ", grey)
+            run(b.warn, amber, true)             // ⚠2
+        }
+        return sb
     }
 
     /** Yellow / Amber tier footer rendered as a SpannableString:
