@@ -116,6 +116,8 @@ data class BundleParts(
     val profit: String,
     val positive: Boolean,
     val warn: String,
+    // Auction bundles: "3h 18m" / "5m" / "auction". Blank for buy-now.
+    val auction: String = "",
 ) {
     companion object {
         fun parse(o: org.json.JSONObject?): BundleParts? {
@@ -130,6 +132,7 @@ data class BundleParts(
                 profit   = o.optString("profit", ""),
                 positive = o.optBoolean("positive", true),
                 warn     = o.optString("warn", ""),
+                auction  = o.optString("auction", ""),
             )
         }
     }

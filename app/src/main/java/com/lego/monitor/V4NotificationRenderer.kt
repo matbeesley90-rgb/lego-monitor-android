@@ -458,6 +458,12 @@ object V4NotificationRenderer {
         run(b.avg, grey)                         // x̄£5.5
         run(" • ", grey)
         run("${b.pct} • ${b.profit}", money, true)   // +103% • £72 (green/red)
+        if (b.auction.isNotBlank()) {
+            // Auction bundles carry a hammer + time remaining, in the
+            // tier-amber so the countdown reads as urgent.
+            run(" \u2022 ", grey)
+            run("\uD83D\uDD28 " + b.auction, amber, true)
+        }
         if (b.warn.isNotBlank()) {
             run("  ", grey)
             run(b.warn, amber, true)             // ⚠2
