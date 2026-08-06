@@ -145,7 +145,8 @@ class MainActivity : AppCompatActivity() {
                 val host = uri.host ?: ""
                 // The monitor UI itself (Pi host) stays in the WebView —
                 // internal pages, /vision, API-backed screens, etc.
-                if (host.contains(PI_HOST)) return false
+                if (host.contains(PI_HOST) ||
+                    host.contains(PI_PUBLIC_HOST)) return false
                 // Anything else is a marketplace link the user tapped —
                 // hand it to the matching native app (Vinted / eBay /
                 // Facebook / Gumtree), falling back to a browser.
@@ -360,10 +361,21 @@ class MainActivity : AppCompatActivity() {
     }
 
     companion object {
-        // The Pi that hosts both the Flask UI and the ntfy WebSocket.
-        // Cleartext to this IP is whitelisted in network_security_config.xml.
-        private const val PI_HOST = "81.96.120.250"
-        // The Pi-hosted Flask UI.
+        // The Flask UI is reached over TAILSCALE, not the public internet.
+        // The port-5000 forward was deleted at the router on 2026-08-06:
+        // the dashboard has no authentication of its own, and it was
+        // answering unauthenticated DELETE and config-overwrite requests
+        // to anyone on the internet. Tailscale is now the access control,
+        // so the Tailscale app must be connected for this to load.
+        // This address also works at home — Tailscale routes directly
+        // over the LAN when both devices are on it.
+        private const val PI_HOST = "100.66.72.71"
+        // ntfy is still served on the PUBLIC ip (port 8084 is deliberately
+        // still forwarded) so push alerts keep arriving even when
+        // Tailscale is off. See WebSocketService.
+        private const val PI_PUBLIC_HOST = "81.96.120.250"
+        // The Pi-hosted Flask UI. Cleartext to both hosts is whitelisted
+        // in network_security_config.xml.
         private const val WEB_UI_URL = "http://$PI_HOST:5000/"
         // Real browsers to fall back to, launched explicitly by package so
         // a generic link-hijacker (My O2) is never picked. First installed
