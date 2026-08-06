@@ -53,6 +53,13 @@ data class V4Payload(
     // match the monitor card border for the priciest fig in the set.
     val iconColor: String = "",
 
+    // "Drop everything" deal. The SERVER decides this (thresholds live in
+    // Pi config: red_alert_min_profit / red_alert_bundle_value /
+    // red_alert_bundle_ratio) so it can be retuned without a new APK.
+    // Renders the whole notification red and routes it to a separate
+    // high-importance channel with its own sound.
+    val redAlert: Boolean = false,
+
     // Bundles only — per-token version of bundleLine so the renderer can
     // colour total (blue), profit (green/red), rest (grey). Null → render
     // the flat bundleLine.
@@ -94,6 +101,7 @@ data class V4Payload(
                     tier         = TierInfo.parse(o.optJSONObject("tier")),
                     bundleLine   = o.optString("bundle_line", ""),
                     iconColor    = o.optString("icon_color", ""),
+                    redAlert     = o.optBoolean("red_alert", false),
                     bundleParts  = BundleParts.parse(o.optJSONObject("bundle_parts")),
                 )
             } catch (_: Exception) {

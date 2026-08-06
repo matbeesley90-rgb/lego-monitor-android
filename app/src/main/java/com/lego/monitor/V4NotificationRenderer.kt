@@ -38,6 +38,12 @@ object V4NotificationRenderer {
 
     private const val TAG = "LegoV4"
     private const val CHANNEL_ID = "lego_monitor_alerts"
+    // "Drop everything" deals — own channel so they sound different, not
+    // just look different. See ensureChannel().
+    private const val RED_CHANNEL_ID = "lego_monitor_red"
+    // Deep red: strong against both One UI's warm notification shade and
+    // a dark background, while leaving white body text readable.
+    private const val RED_ALERT_BG = "#8B0000"
     private val imageThread = Executors.newSingleThreadExecutor()
 
     fun show(ctx: Context, frame: org.json.JSONObject, payload: V4Payload) {
@@ -311,9 +317,24 @@ object V4NotificationRenderer {
             else -> Color.parseColor("#3B98E0")  // brand blue
         }
 
-        val builder = NotificationCompat.Builder(ctx, CHANNEL_ID)
+        // RED ALERT — paint the whole body, not just an accent. The
+        // server decides this (see _is_red_alert in notifications.py);
+        // the app only renders it, so thresholds retune without an APK.
+        // Both layout roots are painted because the collapsed view is
+        // what shows on the lock screen and in the heads-up popup.
+        if (p.redAlert) {
+            val redBg = Color.parseColor(RED_ALERT_BG)
+            collapsed.setInt(R.id.notif_root_collapsed,
+                             "setBackgroundColor", redBg)
+            expanded.setInt(R.id.notif_root_expanded,
+                            "setBackgroundColor", redBg)
+        }
+
+        val builder = NotificationCompat.Builder(
+                ctx, if (p.redAlert) RED_CHANNEL_ID else CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification_head)
-            .setColor(accent)
+            .setColor(if (p.redAlert) Color.parseColor(RED_ALERT_BG)
+                      else accent)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .setCustomContentView(collapsed)
@@ -600,6 +621,7 @@ object V4NotificationRenderer {
 
     private fun ensureChannel(ctx: Context) {
         if (Build.VERSION.SDK_INT < 26) return
+        val mgr = ctx.getSystemService(NotificationManager::class.java)
         val ch = NotificationChannel(
             CHANNEL_ID, "Deal alerts",
             NotificationManager.IMPORTANCE_HIGH
@@ -607,7 +629,28 @@ object V4NotificationRenderer {
             description = "LEGO marketplace deal notifications"
             enableVibration(true)
         }
-        ctx.getSystemService(NotificationManager::class.java)
-            .createNotificationChannel(ch)
+        mgr.createNotificationChannel(ch)
+
+        // SEPARATE CHANNEL for "drop everything" deals. Colour only helps
+        // if you happen to be looking at the screen — a red notification
+        // in a pocket is identical to a grey one. Its own channel gives
+        // it a distinct sound and a heavier vibration, and (Android 13+)
+        // lets the user grant it DND bypass in Settings while ordinary
+        // deals stay quiet. Measured to fire ~1.9x/day at the default
+        // thresholds; keeping it rare is what keeps it meaningful.
+        val red = NotificationChannel(
+            RED_CHANNEL_ID, "Definite buys",
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description =
+                "Exceptional deals only — high profit or a very cheap " +
+                "high-value bundle. Rare by design (~2/day)."
+            enableVibration(true)
+            vibrationPattern = longArrayOf(0, 400, 150, 400, 150, 400)
+            enableLights(true)
+            lightColor = Color.parseColor(RED_ALERT_BG)
+            setBypassDnd(true)
+        }
+        mgr.createNotificationChannel(red)
     }
 }
