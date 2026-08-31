@@ -64,6 +64,16 @@ data class V4Payload(
     // colour total (blue), profit (green/red), rest (grey). Null → render
     // the flat bundleLine.
     val bundleParts: BundleParts? = null,
+
+    // Stable per-listing key. When present, the notification ID derives
+    // from THIS instead of the ntfy message id, so a follow-up push for
+    // the same listing (⚡ flash → 🧮 appraisal → 🔥 hot) REPLACES the
+    // displayed card in place instead of stacking a second notification.
+    val replaceKey: String = "",
+
+    // True on follow-up appraisal cards — post silently (no sound or
+    // vibration); the card content just morphs.
+    val isUpdate: Boolean = false,
 ) {
     val isAuction: Boolean get() = kind == "auction"
 
@@ -103,6 +113,8 @@ data class V4Payload(
                     iconColor    = o.optString("icon_color", ""),
                     redAlert     = o.optBoolean("red_alert", false),
                     bundleParts  = BundleParts.parse(o.optJSONObject("bundle_parts")),
+                    replaceKey   = o.optString("replace_key", ""),
+                    isUpdate     = o.optBoolean("update", false),
                 )
             } catch (_: Exception) {
                 null

@@ -51,7 +51,12 @@ object V4NotificationRenderer {
         try {
             ensureChannel(ctx)
             val msgId  = frame.optString("id")
-            val notifId = msgId.hashCode()
+            // Per-listing replace key (server-sent) wins over the ntfy
+            // message id: every later push for the same listing then
+            // REPLACES the shown card (⚡ → 🧮 → 🔥) instead of stacking.
+            val notifId = if (payload.replaceKey.isNotBlank())
+                ("lm:" + payload.replaceKey).hashCode()
+            else msgId.hashCode()
 
             // Build the bare notification synchronously, then post; if the
             // image is in cache (and our /img/proxy sets a Cache-Control:
@@ -337,12 +342,20 @@ object V4NotificationRenderer {
                       else accent)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
+            // Same-ID re-posts (the bitmap fill-in, and in-place card
+            // updates via replace_key) must not re-buzz.
+            .setOnlyAlertOnce(true)
             .setCustomContentView(collapsed)
             .setCustomBigContentView(expanded)
             .setStyle(NotificationCompat.DecoratedCustomViewStyle())
             // Setting a content title so the channel summary in
             // Settings stays useful; the custom view overrides display.
             .setContentTitle("${brandLabel(p.brand)} • ${p.pct}%")
+
+        // Follow-up appraisal cards (server "update": true) are fully
+        // silent even if the original was dismissed — the numbers just
+        // arrive; only genuinely new listings should make noise.
+        if (p.isUpdate) builder.setSilent(true)
 
         addAction(ctx, builder, "Listing",   p.listingUrl,   p.kind, msgIdSuffix = "L")
         addAction(ctx, builder, "Monitor",   p.monitorUrl,   p.kind, msgIdSuffix = "M")
