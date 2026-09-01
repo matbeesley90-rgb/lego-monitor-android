@@ -74,6 +74,11 @@ data class V4Payload(
     // True on follow-up appraisal cards — post silently (no sound or
     // vibration); the card content just morphs.
     val isUpdate: Boolean = false,
+
+    // True = RETRACT: remove the notification with this replaceKey and
+    // render nothing. Sent when a flash card's verified verdict is
+    // "nothing here" (packaging artwork, unwanted theme).
+    val isCancel: Boolean = false,
 ) {
     val isAuction: Boolean get() = kind == "auction"
 
@@ -115,6 +120,7 @@ data class V4Payload(
                     bundleParts  = BundleParts.parse(o.optJSONObject("bundle_parts")),
                     replaceKey   = o.optString("replace_key", ""),
                     isUpdate     = o.optBoolean("update", false),
+                    isCancel     = o.optBoolean("cancel", false),
                 )
             } catch (_: Exception) {
                 null

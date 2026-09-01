@@ -58,6 +58,15 @@ object V4NotificationRenderer {
                 ("lm:" + payload.replaceKey).hashCode()
             else msgId.hashCode()
 
+            // Server retraction — the verified verdict says the earlier
+            // flash card was junk: remove it and render nothing.
+            if (payload.isCancel) {
+                Log.d(TAG, "V4 cancel: removing notifId=$notifId")
+                ctx.getSystemService(NotificationManager::class.java)
+                    .cancel(notifId)
+                return
+            }
+
             // Build the bare notification synchronously, then post; if the
             // image is in cache (and our /img/proxy sets a Cache-Control:
             // public,max-age=86400), it lands almost instantly. Image
