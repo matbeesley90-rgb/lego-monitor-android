@@ -14,6 +14,7 @@
     [r?_price] [r?_div] [r?_cell_a]    [r?_cell_b]
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/notif_root_expanded"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
@@ -60,8 +61,23 @@
             android:includeFontPadding="false"
             android:ellipsize="end" />
 
-        <!-- Fig-value head: the noticon, tinted to the max-fig band,
-             sitting right after the %. GONE unless a band applies. -->
+        <!-- Bundle marker: stacked bricks, tinted muted grey, sitting
+             right after "• £X •". Pairs with the grey head that follows
+             it (no separator between them — one "bundle" unit). GONE for
+             non-bundle deals. -->
+        <ImageView
+            android:id="@+id/notif_bundle_bricks"
+            android:layout_width="15dp"
+            android:layout_height="15dp"
+            android:layout_marginStart="6dp"
+            android:layout_gravity="center_vertical"
+            android:src="@drawable/ic_notification_bundle"
+            android:visibility="gone"
+            android:contentDescription="@null" />
+
+        <!-- Fig-value head: the noticon, tinted to the max-fig band on
+             sets (sitting right after the %), or muted grey on bundles
+             (sitting right after the bricks). GONE unless it applies. -->
         <ImageView
             android:id="@+id/notif_fig_head"
             android:layout_width="15dp"
@@ -180,15 +196,34 @@
          auctions. Carries the "🟡 £142 • +69% £58 profit" fig-stack
          summary for Yellow / Amber tier deals. -->
 
-    <TextView
-        android:id="@+id/notif_footer"
+    <!-- Footer row: a minifig head tinted to the top fig's value band
+         (replaces the old orange diamond) leads the figs summary. -->
+    <LinearLayout
+        android:id="@+id/notif_footer_row"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="8dp"
-        android:textSize="12sp"
-        android:textColor="#9AA0A6"
-        android:textStyle="italic"
-        android:visibility="gone" />
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:visibility="gone">
+
+        <ImageView
+            android:id="@+id/notif_footer_head"
+            android:layout_width="16dp"
+            android:layout_height="16dp"
+            android:layout_marginEnd="6dp"
+            android:src="@drawable/ic_notification_head"
+            android:visibility="gone"
+            android:contentDescription="@null" />
+
+        <TextView
+            android:id="@+id/notif_footer"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="12sp"
+            android:textColor="#9AA0A6"
+            android:textStyle="italic" />
+    </LinearLayout>
 
     <ImageView
         android:id="@+id/notif_thumb"

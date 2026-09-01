@@ -52,6 +52,33 @@ data class V4Payload(
     // Max-fig-value band colour (hex) — tints the status-bar head to
     // match the monitor card border for the priciest fig in the set.
     val iconColor: String = "",
+
+    // "Drop everything" deal. The SERVER decides this (thresholds live in
+    // Pi config: red_alert_min_profit / red_alert_bundle_value /
+    // red_alert_bundle_ratio) so it can be retuned without a new APK.
+    // Renders the whole notification red and routes it to a separate
+    // high-importance channel with its own sound.
+    val redAlert: Boolean = false,
+
+    // Bundles only — per-token version of bundleLine so the renderer can
+    // colour total (blue), profit (green/red), rest (grey). Null → render
+    // the flat bundleLine.
+    val bundleParts: BundleParts? = null,
+
+    // Stable per-listing key. When present, the notification ID derives
+    // from THIS instead of the ntfy message id, so a follow-up push for
+    // the same listing (⚡ flash → 🧮 appraisal → 🔥 hot) REPLACES the
+    // displayed card in place instead of stacking a second notification.
+    val replaceKey: String = "",
+
+    // True on follow-up appraisal cards — post silently (no sound or
+    // vibration); the card content just morphs.
+    val isUpdate: Boolean = false,
+
+    // True = RETRACT: remove the notification with this replaceKey and
+    // render nothing. Sent when a flash card's verified verdict is
+    // "nothing here" (packaging artwork, unwanted theme).
+    val isCancel: Boolean = false,
 ) {
     val isAuction: Boolean get() = kind == "auction"
 
@@ -89,10 +116,50 @@ data class V4Payload(
                     tier         = TierInfo.parse(o.optJSONObject("tier")),
                     bundleLine   = o.optString("bundle_line", ""),
                     iconColor    = o.optString("icon_color", ""),
+                    redAlert     = o.optBoolean("red_alert", false),
+                    bundleParts  = BundleParts.parse(o.optJSONObject("bundle_parts")),
+                    replaceKey   = o.optString("replace_key", ""),
+                    isUpdate     = o.optBoolean("update", false),
+                    isCancel     = o.optBoolean("cancel", false),
                 )
             } catch (_: Exception) {
                 null
             }
+        }
+    }
+}
+
+/**
+ * Per-token bundle footer — lets the renderer colour each piece:
+ *   [blue]{total}[/] • [grey]{figs}   {avg}[/] • [green|red]{pct} • {profit}[/] [amber]{warn}[/]
+ * `positive` picks green (profit) vs red (loss) for the pct+profit group.
+ */
+data class BundleParts(
+    val total: String,
+    val figs: String,
+    val avg: String,
+    val pct: String,
+    val profit: String,
+    val positive: Boolean,
+    val warn: String,
+    // Auction bundles: "3h 18m" / "5m" / "auction". Blank for buy-now.
+    val auction: String = "",
+) {
+    companion object {
+        fun parse(o: org.json.JSONObject?): BundleParts? {
+            if (o == null) return null
+            val total = o.optString("total", "")
+            if (total.isBlank()) return null
+            return BundleParts(
+                total    = total,
+                figs     = o.optString("figs", ""),
+                avg      = o.optString("avg", ""),
+                pct      = o.optString("pct", ""),
+                profit   = o.optString("profit", ""),
+                positive = o.optBoolean("positive", true),
+                warn     = o.optString("warn", ""),
+                auction  = o.optString("auction", ""),
+            )
         }
     }
 }

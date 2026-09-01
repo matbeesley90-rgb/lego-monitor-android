@@ -3,11 +3,19 @@
   Cleartext HTTP/WS is blocked by default on Android 9+ (target SDK 28+).
   The Pi-hosted ntfy server speaks plain ws://81.96.120.250:8084 — TLS
   would need a cert + reverse proxy that we don't have yet. Scope the
-  cleartext exception to ONLY the Pi's IP so the rest of the app still
-  defaults to HTTPS-only.
+  cleartext exception to ONLY the Pi's addresses so the rest of the app
+  still defaults to HTTPS-only.
+
+  100.66.72.71 is the Pi over Tailscale, which is how the Flask dashboard
+  is reached since the public port-5000 forward was removed (2026-08-06).
+  Cleartext is acceptable there because Tailscale already encrypts the
+  link end-to-end; it never crosses the open internet in the clear.
 -->
 <network-security-config>
     <domain-config cleartextTrafficPermitted="true">
+        <!-- Pi over Tailscale — the Flask dashboard -->
+        <domain includeSubdomains="false">100.66.72.71</domain>
+        <!-- Pi public IP — ntfy WebSocket only (port 8084) -->
         <domain includeSubdomains="false">81.96.120.250</domain>
     </domain-config>
 </network-security-config>

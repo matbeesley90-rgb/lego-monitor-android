@@ -33,6 +33,11 @@ object NotificationRenderer {
         // in the tray rather than overwriting the previous one.
         val notifId = msgId.hashCode()
 
+        // Grail (🎯) alerts should STAY in the tray when tapped — they're a
+        // rare, high-value heads-up the user wants to keep referring back
+        // to. Everything else auto-dismisses on tap as normal.
+        val isGrail = title.contains("Grail", ignoreCase = true)
+
         val channel = if (isBundle) BUNDLE_CHANNEL_ID else CHANNEL_ID
         val builder = NotificationCompat.Builder(ctx, channel)
             .setSmallIcon(R.drawable.ic_notification_head)
@@ -42,7 +47,7 @@ object NotificationRenderer {
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
             .setPriority(if (isBundle) NotificationCompat.PRIORITY_DEFAULT
                          else NotificationCompat.PRIORITY_HIGH)
-            .setAutoCancel(true)
+            .setAutoCancel(!isGrail)
 
         // Up to 3 action buttons from ntfy's actions array. Each gets an
         // ACTION_VIEW PendingIntent for the action's URL.

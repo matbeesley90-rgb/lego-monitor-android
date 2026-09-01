@@ -38,6 +38,12 @@ object V4NotificationRenderer {
 
     private const val TAG = "LegoV4"
     private const val CHANNEL_ID = "lego_monitor_alerts"
+    // "Drop everything" deals — own channel so they sound different, not
+    // just look different. See ensureChannel().
+    private const val RED_CHANNEL_ID = "lego_monitor_red"
+    // Deep red: strong against both One UI's warm notification shade and
+    // a dark background, while leaving white body text readable.
+    private const val RED_ALERT_BG = "#8B0000"
     private val imageThread = Executors.newSingleThreadExecutor()
 
     fun show(ctx: Context, frame: org.json.JSONObject, payload: V4Payload) {
@@ -45,7 +51,21 @@ object V4NotificationRenderer {
         try {
             ensureChannel(ctx)
             val msgId  = frame.optString("id")
-            val notifId = msgId.hashCode()
+            // Per-listing replace key (server-sent) wins over the ntfy
+            // message id: every later push for the same listing then
+            // REPLACES the shown card (⚡ → 🧮 → 🔥) instead of stacking.
+            val notifId = if (payload.replaceKey.isNotBlank())
+                ("lm:" + payload.replaceKey).hashCode()
+            else msgId.hashCode()
+
+            // Server retraction — the verified verdict says the earlier
+            // flash card was junk: remove it and render nothing.
+            if (payload.isCancel) {
+                Log.d(TAG, "V4 cancel: removing notifId=$notifId")
+                ctx.getSystemService(NotificationManager::class.java)
+                    .cancel(notifId)
+                return
+            }
 
             // Build the bare notification synchronously, then post; if the
             // image is in cache (and our /img/proxy sets a Cache-Control:
@@ -143,6 +163,9 @@ object V4NotificationRenderer {
                     "setBackgroundColor", tier.bannerColor)
                 collapsed.setViewVisibility(R.id.notif_collapsed_top_stripe, View.GONE)
             }
+            // Tier deals keep their own text-icon; the leading footer head
+            // is a bundle-only element.
+            expanded.setViewVisibility(R.id.notif_footer_head, View.GONE)
             val footerParts = tier.footerParts
             if (footerParts != null) {
                 // Multi-colour render: fig_sum in asking-blue, pct +
@@ -150,14 +173,14 @@ object V4NotificationRenderer {
                 // muted grey. Colours pulled from the same V4Style
                 // block the price grid uses, so a tweak in the
                 // Settings panel propagates.
-                expanded.setViewVisibility(R.id.notif_footer, View.VISIBLE)
+                expanded.setViewVisibility(R.id.notif_footer_row, View.VISIBLE)
                 expanded.setTextViewText(R.id.notif_footer,
                     tierFooterSpannable(footerParts, s))
             } else if (tier.footer.isNotBlank()) {
-                expanded.setViewVisibility(R.id.notif_footer, View.VISIBLE)
+                expanded.setViewVisibility(R.id.notif_footer_row, View.VISIBLE)
                 expanded.setTextViewText(R.id.notif_footer, tier.footer)
             } else {
-                expanded.setViewVisibility(R.id.notif_footer, View.GONE)
+                expanded.setViewVisibility(R.id.notif_footer_row, View.GONE)
             }
         } else {
             expanded.setViewVisibility(R.id.notif_banner, View.GONE)
@@ -165,13 +188,26 @@ object V4NotificationRenderer {
             collapsed.setViewVisibility(R.id.notif_collapsed_top_stripe, View.GONE)
             if (p.kind == "bundle" && p.bundleLine.isNotBlank()) {
                 // Bundles: no tier banner/stripe, but the footer slot
-                // carries the server-composed figs line ("8 figs •
-                // £1.01/fig" or the vision estimate) — the same
-                // position the profit line occupies on tiered deals.
-                expanded.setViewVisibility(R.id.notif_footer, View.VISIBLE)
-                expanded.setTextViewText(R.id.notif_footer, p.bundleLine)
+                // carries the server-composed figs line. A minifig head
+                // tinted to the top fig's value band leads it (replacing
+                // the old orange diamond); grey when no band applies.
+                expanded.setViewVisibility(R.id.notif_footer_row, View.VISIBLE)
+                // Coloured per-token render when the payload carries parts
+                // (total blue, profit green/red, rest grey); flat text else.
+                if (p.bundleParts != null) {
+                    expanded.setTextViewText(R.id.notif_footer,
+                        bundleFooterSpannable(p.bundleParts, s))
+                } else {
+                    expanded.setTextViewText(R.id.notif_footer, p.bundleLine)
+                }
+                expanded.setViewVisibility(R.id.notif_footer_head, View.VISIBLE)
+                val headTint = if (p.iconColor.isNotBlank()) {
+                    try { Color.parseColor(p.iconColor) }
+                    catch (_: Exception) { Color.parseColor("#8A8A95") }
+                } else Color.parseColor("#8A8A95")
+                expanded.setInt(R.id.notif_footer_head, "setColorFilter", headTint)
             } else {
-                expanded.setViewVisibility(R.id.notif_footer, View.GONE)
+                expanded.setViewVisibility(R.id.notif_footer_row, View.GONE)
             }
         }
 
@@ -248,17 +284,35 @@ object V4NotificationRenderer {
         // Fig-value head on the card title row — the noticon tinted to
         // the band colour, right after the %. Both surfaces; hidden
         // when no band applies.
-        if (p.iconColor.isNotBlank()) {
+        if (p.kind == "bundle") {
+            // Bundle marker: stacked bricks + muted grey head, sitting
+            // together (no separator) after "• £X •". Grey — not a fig-
+            // value band colour — because a bundle's contents (sets or
+            // figs) and their value are unknown. Both tinted the same
+            // muted grey so they read as one "bundle" unit.
+            val greyMarker = Color.parseColor("#8A8A95")
+            for (rv in listOf(collapsed, expanded)) {
+                rv.setViewVisibility(R.id.notif_bundle_bricks, View.VISIBLE)
+                rv.setInt(R.id.notif_bundle_bricks, "setColorFilter", greyMarker)
+                // Title-row head hidden for bundles now — the value-tinted
+                // head lives on the footer fig line (Mat, 2026-07-23), so a
+                // second grey head here would just be noise.
+                rv.setViewVisibility(R.id.notif_fig_head, View.GONE)
+            }
+        } else if (p.iconColor.isNotBlank()) {
             try {
                 val band = Color.parseColor(p.iconColor)
                 for (rv in listOf(collapsed, expanded)) {
+                    rv.setViewVisibility(R.id.notif_bundle_bricks, View.GONE)
                     rv.setViewVisibility(R.id.notif_fig_head, View.VISIBLE)
                     rv.setInt(R.id.notif_fig_head, "setColorFilter", band)
                 }
             } catch (_: Exception) {}
         } else {
-            collapsed.setViewVisibility(R.id.notif_fig_head, View.GONE)
-            expanded.setViewVisibility(R.id.notif_fig_head, View.GONE)
+            for (rv in listOf(collapsed, expanded)) {
+                rv.setViewVisibility(R.id.notif_bundle_bricks, View.GONE)
+                rv.setViewVisibility(R.id.notif_fig_head, View.GONE)
+            }
         }
 
         // Priority: server-sent icon_color (max-fig-value band, matching
@@ -277,17 +331,40 @@ object V4NotificationRenderer {
             else -> Color.parseColor("#3B98E0")  // brand blue
         }
 
-        val builder = NotificationCompat.Builder(ctx, CHANNEL_ID)
+        // RED ALERT — paint the whole body, not just an accent. The
+        // server decides this (see _is_red_alert in notifications.py);
+        // the app only renders it, so thresholds retune without an APK.
+        // Both layout roots are painted because the collapsed view is
+        // what shows on the lock screen and in the heads-up popup.
+        if (p.redAlert) {
+            val redBg = Color.parseColor(RED_ALERT_BG)
+            collapsed.setInt(R.id.notif_root_collapsed,
+                             "setBackgroundColor", redBg)
+            expanded.setInt(R.id.notif_root_expanded,
+                            "setBackgroundColor", redBg)
+        }
+
+        val builder = NotificationCompat.Builder(
+                ctx, if (p.redAlert) RED_CHANNEL_ID else CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification_head)
-            .setColor(accent)
+            .setColor(if (p.redAlert) Color.parseColor(RED_ALERT_BG)
+                      else accent)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
+            // Same-ID re-posts (the bitmap fill-in, and in-place card
+            // updates via replace_key) must not re-buzz.
+            .setOnlyAlertOnce(true)
             .setCustomContentView(collapsed)
             .setCustomBigContentView(expanded)
             .setStyle(NotificationCompat.DecoratedCustomViewStyle())
             // Setting a content title so the channel summary in
             // Settings stays useful; the custom view overrides display.
             .setContentTitle("${brandLabel(p.brand)} • ${p.pct}%")
+
+        // Follow-up appraisal cards (server "update": true) are fully
+        // silent even if the original was dismissed — the numbers just
+        // arrive; only genuinely new listings should make noise.
+        if (p.isUpdate) builder.setSilent(true)
 
         addAction(ctx, builder, "Listing",   p.listingUrl,   p.kind, msgIdSuffix = "L")
         addAction(ctx, builder, "Monitor",   p.monitorUrl,   p.kind, msgIdSuffix = "M")
@@ -306,11 +383,28 @@ object V4NotificationRenderer {
         val s = p.style
         val sb = SpannableStringBuilder()
         sb.append("• ")
+        // Asking price on the title line — the number that decides whether a
+        // deal is worth opening. Kept here (not just in the price grid below)
+        // so it survives the collapsed / stacked tray view, where the grid is
+        // hidden. Blue to match the card headline; rounded so title and grid
+        // agree (fillGridRow uses the same asking.roundToInt()).
+        val priceStart = sb.length
+        sb.append("£${p.asking.roundToInt()}")
+        sb.setSpan(ForegroundColorSpan(Color.parseColor("#3B98E0")),
+            priceStart, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        // Bundles have no meaningful headline % (nothing to compare
+        // against, and no known fig value). Instead of a pct the title
+        // row carries the stacked-bricks marker + a muted grey head —
+        // both ImageViews, set VISIBLE in post(). Here we just close the
+        // text with a trailing "•" so it reads "[brand] • £19 •" and the
+        // bricks+head pair sit right after it as one "bundle" unit.
+        if (p.kind == "bundle") {
+            sb.append(" •")
+            return sb
+        }
+        sb.append(" • ")
         val pctStart = sb.length
-        // Bundles have no meaningful headline % — the 📦 marker sits in
-        // the pct slot at the same scale, so collapsed reads
-        // "[brand] • 📦" exactly where a deal reads "[brand] • 67%".
-        sb.append(if (p.kind == "bundle") "\uD83D\uDCE6" else "${p.pct}%")
+        sb.append("${p.pct}%")
         val pctEnd = sb.length
         // Headline pct: RelativeSizeSpan scales it above the base, colour
         // from style.
@@ -373,6 +467,51 @@ object V4NotificationRenderer {
         rv.setTextViewText(idPrice, priceStr)
         rv.setTextViewText(idCellA, cellSpannable(labA, valA, p.trueCost, styleA))
         rv.setTextViewText(idCellB, cellSpannable(labB, valB, p.trueCost, styleB))
+    }
+
+    /** Bundle footer rendered as a SpannableString (Mat, 2026-07-23):
+     *   [blue bold]{total}[/] [grey] • {figs}   {avg} • [/]
+     *   [green|red bold]{pct} • {profit}[/] [amber] {warn}[/]
+     * Total in asking-blue; the pct+profit group in positive-green or
+     * negative-red per `positive`; a wide gap between fig-count and average;
+     * everything else muted grey. Colours track V4Style so a Settings tweak
+     * propagates. */
+    private fun bundleFooterSpannable(b: BundleParts, s: V4Style): CharSequence {
+        val grey  = Color.parseColor("#9AA0A6")
+        val blue  = s.askingColor
+        val money = if (b.positive) s.cellBN.pctPosColor else s.cellBN.pctNegColor
+        val amber = Color.parseColor("#E0A53B")
+        val bold  = android.graphics.Typeface.BOLD
+
+        val sb = SpannableStringBuilder()
+        fun run(text: String, color: Int, boldRun: Boolean = false) {
+            if (text.isEmpty()) return
+            val st = sb.length
+            sb.append(text)
+            sb.setSpan(ForegroundColorSpan(color), st, sb.length,
+                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            if (boldRun) sb.setSpan(StyleSpan(bold), st, sb.length,
+                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        }
+
+        run(b.total, blue, true)                 // £142  (blue, bold)
+        run(" • ", grey)
+        run(b.figs, grey)                        // 26 figs
+        run("   ", grey)                         // the requested gap
+        run(b.avg, grey)                         // x̄£5.5
+        run(" • ", grey)
+        run("${b.pct} • ${b.profit}", money, true)   // +103% • £72 (green/red)
+        if (b.auction.isNotBlank()) {
+            // Auction bundles carry a hammer + time remaining, in the
+            // tier-amber so the countdown reads as urgent.
+            run(" \u2022 ", grey)
+            run("\uD83D\uDD28 " + b.auction, amber, true)
+        }
+        if (b.warn.isNotBlank()) {
+            run("  ", grey)
+            run(b.warn, amber, true)             // ⚠2
+        }
+        return sb
     }
 
     /** Yellow / Amber tier footer rendered as a SpannableString:
@@ -504,6 +643,7 @@ object V4NotificationRenderer {
 
     private fun ensureChannel(ctx: Context) {
         if (Build.VERSION.SDK_INT < 26) return
+        val mgr = ctx.getSystemService(NotificationManager::class.java)
         val ch = NotificationChannel(
             CHANNEL_ID, "Deal alerts",
             NotificationManager.IMPORTANCE_HIGH
@@ -511,7 +651,28 @@ object V4NotificationRenderer {
             description = "LEGO marketplace deal notifications"
             enableVibration(true)
         }
-        ctx.getSystemService(NotificationManager::class.java)
-            .createNotificationChannel(ch)
+        mgr.createNotificationChannel(ch)
+
+        // SEPARATE CHANNEL for "drop everything" deals. Colour only helps
+        // if you happen to be looking at the screen — a red notification
+        // in a pocket is identical to a grey one. Its own channel gives
+        // it a distinct sound and a heavier vibration, and (Android 13+)
+        // lets the user grant it DND bypass in Settings while ordinary
+        // deals stay quiet. Measured to fire ~1.9x/day at the default
+        // thresholds; keeping it rare is what keeps it meaningful.
+        val red = NotificationChannel(
+            RED_CHANNEL_ID, "Definite buys",
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description =
+                "Exceptional deals only — high profit or a very cheap " +
+                "high-value bundle. Rare by design (~2/day)."
+            enableVibration(true)
+            vibrationPattern = longArrayOf(0, 400, 150, 400, 150, 400)
+            enableLights(true)
+            lightColor = Color.parseColor(RED_ALERT_BG)
+            setBypassDnd(true)
+        }
+        mgr.createNotificationChannel(red)
     }
 }
