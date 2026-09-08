@@ -39,8 +39,13 @@ class WebSocketService : Service() {
         // set to TOPIC_BUNDLES *after* this build is installed.
         const val TOPIC_MAIN    = "lego-monitor-xeP73SxvVPlq"
         const val TOPIC_BUNDLES = "lego-monitor-bundles-xeP73SxvVPlq"
+        // 2026-09-08: ntfy is reached over TAILSCALE, like the dashboard.
+        // The public-IP forward on :8084 is being closed (it was the last
+        // service the Pi exposed to the internet), and a hardcoded public
+        // IP would have broken at the house move anyway. Tailscale must be
+        // connected on the phone for pushes — enable "Always-on VPN".
         private const val WS_URL =
-            "ws://81.96.120.250:8084/$TOPIC_MAIN,$TOPIC_BUNDLES/ws"
+            "ws://100.66.72.71:8084/$TOPIC_MAIN,$TOPIC_BUNDLES/ws"
 
         // Foreground-notification plumbing.
         private const val FG_CHANNEL_ID = "lego_monitor_status"

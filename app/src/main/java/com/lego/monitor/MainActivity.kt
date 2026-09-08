@@ -145,8 +145,7 @@ class MainActivity : AppCompatActivity() {
                 val host = uri.host ?: ""
                 // The monitor UI itself (Pi host) stays in the WebView —
                 // internal pages, /vision, API-backed screens, etc.
-                if (host.contains(PI_HOST) ||
-                    host.contains(PI_PUBLIC_HOST)) return false
+                if (host.contains(PI_HOST)) return false
                 // Anything else is a marketplace link the user tapped —
                 // hand it to the matching native app (Vinted / eBay /
                 // Facebook / Gumtree), falling back to a browser.
@@ -370,10 +369,9 @@ class MainActivity : AppCompatActivity() {
         // This address also works at home — Tailscale routes directly
         // over the LAN when both devices are on it.
         private const val PI_HOST = "100.66.72.71"
-        // ntfy is still served on the PUBLIC ip (port 8084 is deliberately
-        // still forwarded) so push alerts keep arriving even when
-        // Tailscale is off. See WebSocketService.
-        private const val PI_PUBLIC_HOST = "81.96.120.250"
+        // 2026-09-08: ntfy moved to the Tailscale address too (see
+        // WebSocketService) and the :8084 public forward is closed. The Pi
+        // no longer has any public-internet surface.
         // The Pi-hosted Flask UI. Cleartext to both hosts is whitelisted
         // in network_security_config.xml.
         private const val WEB_UI_URL = "http://$PI_HOST:5000/"

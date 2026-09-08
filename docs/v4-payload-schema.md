@@ -24,8 +24,8 @@ shows something useful.
   "eb_used":  139,
   "image_url":     "https://.../thumbnail-256.jpg",
   "listing_url":   "https://www.vinted.co.uk/items/12345",
-  "monitor_url":   "http://81.96.120.250:5000/#listing=...",
-  "catalogue_url": "http://81.96.120.250:5000/#catalogue=sw/sets/75274",
+  "monitor_url":   "http://100.66.72.71:5000/#listing=...",
+  "catalogue_url": "http://100.66.72.71:5000/#catalogue=sw/sets/75274",
 
   "_auction_only": {
     "mins_left": 17,
