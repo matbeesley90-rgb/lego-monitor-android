@@ -145,7 +145,7 @@ object V4NotificationRenderer {
             // Top-of-expanded banner + left-edge collapsed stripe are
             // driven from the SAME tier.bannerColor so the two surfaces
             // stay in sync.
-            expanded.setViewVisibility(R.id.notif_banner, View.VISIBLE)
+            expanded.setViewVisibility(R.id.notif_banner_wrap, View.VISIBLE)
             expanded.setInt(R.id.notif_banner,
                 "setBackgroundColor", tier.bannerColor)
             // Collapsed stripe: TOP for yellow, LEFT for amber. Two
@@ -183,7 +183,7 @@ object V4NotificationRenderer {
                 expanded.setViewVisibility(R.id.notif_footer_row, View.GONE)
             }
         } else {
-            expanded.setViewVisibility(R.id.notif_banner, View.GONE)
+            expanded.setViewVisibility(R.id.notif_banner_wrap, View.GONE)
             collapsed.setViewVisibility(R.id.notif_collapsed_stripe, View.GONE)
             collapsed.setViewVisibility(R.id.notif_collapsed_top_stripe, View.GONE)
             if (p.kind == "bundle" && p.bundleLine.isNotBlank()) {
@@ -209,6 +209,54 @@ object V4NotificationRenderer {
             } else {
                 expanded.setViewVisibility(R.id.notif_footer_row, View.GONE)
             }
+        }
+
+        // ── 🎯 Grail (2026-09-08, Mat's design) ────────────────────────
+        // The banner across the top turns violet — deliberately NOT a
+        // tier colour — and a small tab hangs from its right end with the
+        // golden-brick mark and one word. The tab is the link to the
+        // grail's OWN catalogue page (set or fig). Collapsed row: violet
+        // top + side stripes and the same tab, so a grail is picked out
+        // of the list without opening it. Everything else on the card is
+        // untouched (head, price rows, footer, actions).
+        val grail = p.grail
+        if (grail != null) {
+            val violet = Color.parseColor(GRAIL_COLOR)
+            expanded.setViewVisibility(R.id.notif_banner_wrap, View.VISIBLE)
+            expanded.setInt(R.id.notif_banner, "setBackgroundColor", violet)
+            expanded.setViewVisibility(R.id.notif_grail_tab, View.VISIBLE)
+            collapsed.setViewVisibility(R.id.notif_collapsed_top_stripe, View.VISIBLE)
+            collapsed.setInt(R.id.notif_collapsed_top_stripe,
+                "setBackgroundColor", violet)
+            collapsed.setViewVisibility(R.id.notif_collapsed_stripe, View.VISIBLE)
+            collapsed.setInt(R.id.notif_collapsed_stripe,
+                "setBackgroundColor", violet)
+            collapsed.setViewVisibility(R.id.notif_grail_tab, View.VISIBLE)
+            if (grail.catalogueUrl.isNotBlank()) {
+                val pi = openInAppIntent(ctx, grail.catalogueUrl, "grail:" + p.listingId)
+                expanded.setOnClickPendingIntent(R.id.notif_grail_tab, pi)
+                collapsed.setOnClickPendingIntent(R.id.notif_grail_tab, pi)
+            }
+        } else {
+            expanded.setViewVisibility(R.id.notif_grail_tab, View.GONE)
+            collapsed.setViewVisibility(R.id.notif_grail_tab, View.GONE)
+        }
+
+        // ── Info face on the photo's top-right corner (2026-09-08) ──────
+        // The dashboard card's ⓘ face, same four expressions and colours,
+        // decided server-side (`face`). Tap → the native info sheet.
+        if (p.listingId.isNotBlank() && p.apiBase.isNotBlank()) {
+            expanded.setViewVisibility(R.id.notif_face_btn, View.VISIBLE)
+            expanded.setImageViewResource(R.id.notif_face_btn, faceDrawable(p.face))
+            expanded.setInt(R.id.notif_face_btn, "setColorFilter", faceColor(p.face))
+            expanded.setOnClickPendingIntent(R.id.notif_face_btn, infoSheetIntent(ctx, p))
+        } else {
+            expanded.setViewVisibility(R.id.notif_face_btn, View.GONE)
+        }
+
+        // ── Photo tap → full-screen viewer ──────────────────────────────
+        if (p.photoUrl.isNotBlank()) {
+            expanded.setOnClickPendingIntent(R.id.notif_thumb, photoIntent(ctx, p))
         }
 
         // Apply runtime-tunable sizes (from V4Style) to every text view
@@ -321,6 +369,9 @@ object V4NotificationRenderer {
         // in the status bar becomes a value cue for the best fig in the
         // set at a glance.
         val accent = when {
+            // A grail's status-bar icon goes violet so it stands out in
+            // the stacked tray, where our custom views are not drawn.
+            p.grail != null -> Color.parseColor(GRAIL_COLOR)
             p.iconColor.isNotBlank() -> try {
                 Color.parseColor(p.iconColor)
             } catch (_: Exception) {
@@ -625,6 +676,69 @@ object V4NotificationRenderer {
         "vinted"   -> "Vinted"
         "facebook" -> "Facebook"
         else       -> brand.replaceFirstChar { it.uppercase() }
+    }
+
+    // Violet on purpose: a grail must never read as a tier colour.
+    private const val GRAIL_COLOR = "#7C5CE6"
+
+    /** The dashboard's four face expressions, keyed by the server's
+     *  `face` state. Never the status-bar head icon — that one is sacred. */
+    private fun faceDrawable(state: String): Int = when (state) {
+        "good" -> R.drawable.ic_face_grin
+        "vis"  -> R.drawable.ic_face_look
+        "adj"  -> R.drawable.ic_face_hmm
+        else   -> R.drawable.ic_face_flat
+    }
+
+    private fun faceColor(state: String): Int = Color.parseColor(when (state) {
+        "good" -> "#4CC38A"   // vision ratio ≥ 1.5 — real margin
+        "vis"  -> "#F0A12A"   // vision has run
+        "adj"  -> "#FFD27A"   // references adjusted
+        else   -> "#C9C9C9"
+    })
+
+    /** Open a monitor URL (catalogue / listing deep link) INSIDE the app's
+     *  WebView, never a browser. MainActivity is singleTask so this lands
+     *  in the running instance. */
+    private fun openInAppIntent(ctx: Context, url: String, key: String): PendingIntent {
+        val i = Intent(ctx, MainActivity::class.java)
+            .putExtra(MainActivity.EXTRA_OPEN_URL, url)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        return PendingIntent.getActivity(
+            ctx, key.hashCode(), i,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+    }
+
+    private fun infoSheetIntent(ctx: Context, p: V4Payload): PendingIntent {
+        val i = Intent(ctx, InfoSheetActivity::class.java).apply {
+            putExtra(InfoSheetActivity.EXTRA_LISTING_ID, p.listingId)
+            putExtra(InfoSheetActivity.EXTRA_API_BASE, p.apiBase)
+            putExtra(InfoSheetActivity.EXTRA_TITLE, p.sellerTitle.ifBlank { p.setName })
+            putExtra(InfoSheetActivity.EXTRA_BRAND, brandLabel(p.brand))
+            putExtra(InfoSheetActivity.EXTRA_ASKING, p.asking)
+            putExtra(InfoSheetActivity.EXTRA_TRUE_COST, p.trueCost)
+            putExtra(InfoSheetActivity.EXTRA_LISTING_URL, p.listingUrl)
+            putExtra(InfoSheetActivity.EXTRA_MONITOR_URL, p.monitorUrl)
+            putExtra(InfoSheetActivity.EXTRA_PHOTO_URL, p.photoUrl)
+            putExtra(InfoSheetActivity.EXTRA_GRAIL_JSON, p.grail?.raw ?: "")
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        return PendingIntent.getActivity(
+            ctx, ("info:" + p.listingId).hashCode(), i,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+    }
+
+    private fun photoIntent(ctx: Context, p: V4Payload): PendingIntent {
+        val i = Intent(ctx, PhotoViewerActivity::class.java).apply {
+            putExtra(PhotoViewerActivity.EXTRA_URL, p.photoUrl)
+            putExtra(PhotoViewerActivity.EXTRA_TITLE, p.sellerTitle.ifBlank { p.setName })
+            putExtra(PhotoViewerActivity.EXTRA_SUB,
+                "${brandLabel(p.brand)} · £${p.asking.roundToInt()}")
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        return PendingIntent.getActivity(
+            ctx, ("photo:" + p.listingId).hashCode(), i,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
     }
 
     private fun addAction(

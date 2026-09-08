@@ -100,6 +100,7 @@ class MainActivity : AppCompatActivity() {
         statusView.text = "LEGO Monitor — Starting…"
 
         setupWebView()
+        handleOpenIntent(intent)
 
         // WebView back button navigates page history before leaving the app.
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
@@ -345,6 +346,35 @@ class MainActivity : AppCompatActivity() {
         ContextCompat.startForegroundService(this, svc)
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleOpenIntent(intent)
+    }
+
+    /**
+     * Deep links from our own surfaces (2026-09-08): the notification's
+     * grail tab and the info sheet's Monitor / Catalogue links pass a
+     * monitor URL to load in the WebView; "open listing" passes a
+     * marketplace URL that goes through openExternal so it lands in the
+     * native app, never the O2 hijacker. Extras are cleared after use so
+     * a recreate doesn't replay them.
+     */
+    private fun handleOpenIntent(intent: Intent?) {
+        if (intent == null) return
+        val url = intent.getStringExtra(EXTRA_OPEN_URL)
+        if (!url.isNullOrBlank()) {
+            intent.removeExtra(EXTRA_OPEN_URL)
+            webView.loadUrl(url)
+            return
+        }
+        val listing = intent.getStringExtra(EXTRA_OPEN_LISTING)
+        if (!listing.isNullOrBlank()) {
+            intent.removeExtra(EXTRA_OPEN_LISTING)
+            openExternal(Uri.parse(listing))
+        }
+    }
+
     override fun onStart() {
         super.onStart()
         ContextCompat.registerReceiver(
@@ -360,6 +390,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     companion object {
+        // Intent extras understood by handleOpenIntent().
+        const val EXTRA_OPEN_URL = "open_url"
+        const val EXTRA_OPEN_LISTING = "open_listing"
         // The Flask UI is reached over TAILSCALE, not the public internet.
         // The port-5000 forward was deleted at the router on 2026-08-06:
         // the dashboard has no authentication of its own, and it was

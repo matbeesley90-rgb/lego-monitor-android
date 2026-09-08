@@ -60,3 +60,13 @@ The new app **prefers** the V4 JSON in `message` and ignores `title`/`actions`/`
 ## Versioning
 
 `v` is mandatory. The app's parser checks `v == 4` before treating the frame as structured; anything else (or a missing `v`, or invalid JSON) falls back to plain-text rendering. Bumping the schema is a coordinated change: Pi-side flag flip + app-side parser update + app version push.
+
+## v0.2 additions (2026-09-08)
+
+Extra top-level fields the app reads when present (older apps ignore them):
+
+- `listing_id` — the listing's id (same value as `replace_key`).
+- `api_base` — the Pi's dashboard/API base over Tailscale, e.g. `http://100.66.72.71:5000`. The info sheet calls `GET {api_base}/api/listing/{listing_id}/info`, `POST …/api/vision/run?id=`, `…/fetch_description`, `/api/like`, `/api/dismiss`, `/api/purchases`, `/api/catalogue/save`.
+- `face` — state of the info face on the photo corner: `""` neutral, `"adj"` references adjusted, `"vis"` vision has run, `"good"` vision ratio ≥ 1.5. Decided server-side (`_face_state`) to match the dashboard card's ⓘ button.
+- `photo_url` — un-cropped listing photo, proxied through `{api_base}/img/proxy`, for the full-screen viewer (tap on the thumbnail).
+- `grail` — `{num, name, ref, asking, pct_under, catalogue_url}` or `null`. Present when the matched set/fig is on the want list at ≥ `want_discount_pct` under its value. Renders the violet banner + the GRAIL tab; the tab links to `catalogue_url` (the grail's own page). There is no separate grail push any more.

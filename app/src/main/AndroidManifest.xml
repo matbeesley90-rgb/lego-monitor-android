@@ -34,12 +34,28 @@
 
         <activity
             android:name=".MainActivity"
+            android:launchMode="singleTask"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- 2026-09-08: opened from the notification's info face. Native
+             sheet over whatever is on screen; not a browser page. -->
+        <activity
+            android:name=".InfoSheetActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTop"
+            android:theme="@style/Theme.LegoMonitor.Sheet" />
+        <!-- Tap on the notification photo. -->
+        <activity
+            android:name=".PhotoViewerActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:theme="@style/Theme.LegoMonitor.Viewer" />
 
         <service
             android:name=".WebSocketService"

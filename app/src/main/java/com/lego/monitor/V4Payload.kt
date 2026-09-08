@@ -79,6 +79,20 @@ data class V4Payload(
     // render nothing. Sent when a flash card's verified verdict is
     // "nothing here" (packaging artwork, unwanted theme).
     val isCancel: Boolean = false,
+
+    // ── v0.2 (2026-09-08): grail tab, info face, photo tap ──────────
+    // Listing id + the Pi's API base (over Tailscale) — the info sheet
+    // fetches /api/listing/<id>/info from these.
+    val listingId: String = "",
+    val apiBase: String = "",
+    // Info-face state, decided server-side to match the dashboard card:
+    // "" neutral | "adj" refs adjusted | "vis" vision ran | "good" ratio ≥ 1.5
+    val face: String = "",
+    // Un-cropped, proxied listing photo for the full-screen viewer.
+    val photoUrl: String = "",
+    // 🎯 Grail block — present only when the matched set/fig is on Mat's
+    // want list at a real discount. Drives the violet banner + tab.
+    val grail: GrailInfo? = null,
 ) {
     val isAuction: Boolean get() = kind == "auction"
 
@@ -121,10 +135,48 @@ data class V4Payload(
                     replaceKey   = o.optString("replace_key", ""),
                     isUpdate     = o.optBoolean("update", false),
                     isCancel     = o.optBoolean("cancel", false),
+                    listingId    = o.optString("listing_id", ""),
+                    apiBase      = o.optString("api_base", ""),
+                    face         = o.optString("face", ""),
+                    photoUrl     = o.optString("photo_url", ""),
+                    grail        = GrailInfo.parse(o.optJSONObject("grail")),
                 )
             } catch (_: Exception) {
                 null
             }
+        }
+    }
+}
+
+/**
+ * 🎯 Grail block (2026-09-08). The card shows only the violet banner and
+ * the tab; the numbers live in the info sheet. `catalogueUrl` is the
+ * GRAIL's own set/fig page (the tab's link). `raw` is carried to the
+ * sheet as-is so it can render the gold line without re-parsing.
+ */
+data class GrailInfo(
+    val num: String,
+    val name: String,
+    val ref: Double,
+    val asking: Double,
+    val pctUnder: Int,
+    val catalogueUrl: String,
+    val raw: String,
+) {
+    companion object {
+        fun parse(o: org.json.JSONObject?): GrailInfo? {
+            if (o == null) return null
+            val num = o.optString("num", "")
+            if (num.isBlank()) return null
+            return GrailInfo(
+                num          = num,
+                name         = o.optString("name", num),
+                ref          = o.optDouble("ref", 0.0),
+                asking       = o.optDouble("asking", 0.0),
+                pctUnder     = o.optInt("pct_under", 0),
+                catalogueUrl = o.optString("catalogue_url", ""),
+                raw          = o.toString(),
+            )
         }
     }
 }

@@ -126,6 +126,32 @@
         android:singleLine="true"
         android:ellipsize="end" />
 
+    <!-- 2026-09-08: grail tab hanging from the (violet) top stripe in the
+         collapsed row too, so a grail is spotted in the list. Negative
+         top margin cancels the RelativeLayout padding so it touches the
+         stripe. Tap → the grail's catalogue page. -->
+    <LinearLayout
+        android:id="@+id/notif_grail_tab"
+        android:layout_width="wrap_content"
+        android:layout_height="16dp"
+        android:layout_alignParentTop="true"
+        android:layout_alignParentEnd="true"
+        android:layout_marginTop="-8dp"
+        android:layout_marginEnd="4dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="5dp"
+        android:paddingEnd="5dp"
+        android:background="@drawable/bg_grail_tab"
+        android:visibility="gone">
+
+        <ImageView
+            android:layout_width="11dp"
+            android:layout_height="11dp"
+            android:src="@drawable/ic_grail_brick"
+            android:contentDescription="@null" />
+    </LinearLayout>
+
     </RelativeLayout>
 
     </LinearLayout>

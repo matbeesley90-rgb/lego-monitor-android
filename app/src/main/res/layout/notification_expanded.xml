@@ -27,14 +27,59 @@
          Uses ImageView (not bare View) — Samsung's notification
          compositor sometimes rejects bare <View> elements in
          RemoteViews. ImageView is rock-solid. -->
-    <ImageView
-        android:id="@+id/notif_banner"
+    <!-- 2026-09-08: wrapped so the 🎯 grail tab can hang from the banner's
+         right end. The wrap is what gets shown/hidden now; the banner
+         keeps its id for setBackgroundColor. -->
+    <FrameLayout
+        android:id="@+id/notif_banner_wrap"
         android:layout_width="match_parent"
-        android:layout_height="6dp"
+        android:layout_height="wrap_content"
         android:layout_marginBottom="8dp"
-        android:scaleType="fitXY"
-        android:contentDescription="@null"
-        android:visibility="gone" />
+        android:visibility="gone">
+
+        <ImageView
+            android:id="@+id/notif_banner"
+            android:layout_width="match_parent"
+            android:layout_height="6dp"
+            android:layout_gravity="top"
+            android:scaleType="fitXY"
+            android:contentDescription="@null" />
+
+        <!-- Grail tab: violet, rounded bottom corners, golden-brick mark +
+             one word. Tap → the grail's own catalogue page. GONE unless
+             the payload carries a `grail` block. -->
+        <LinearLayout
+            android:id="@+id/notif_grail_tab"
+            android:layout_width="wrap_content"
+            android:layout_height="18dp"
+            android:layout_gravity="top|end"
+            android:layout_marginTop="6dp"
+            android:layout_marginEnd="10dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingStart="7dp"
+            android:paddingEnd="8dp"
+            android:background="@drawable/bg_grail_tab"
+            android:visibility="gone">
+
+            <ImageView
+                android:layout_width="12dp"
+                android:layout_height="12dp"
+                android:src="@drawable/ic_grail_brick"
+                android:contentDescription="@null" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="5dp"
+                android:text="GRAIL"
+                android:textSize="9sp"
+                android:textStyle="bold"
+                android:textColor="#FFFFFFFF"
+                android:letterSpacing="0.18"
+                android:includeFontPadding="false" />
+        </LinearLayout>
+    </FrameLayout>
 
     <!-- Title row: brand wordmark (image) + " • " + green pct + optional " • 🔨 timer" -->
     <LinearLayout
@@ -225,13 +270,34 @@
             android:textStyle="italic" />
     </LinearLayout>
 
-    <ImageView
-        android:id="@+id/notif_thumb"
+    <!-- 2026-09-08: photo wrapped so the info face can sit on its top-right
+         corner, exactly where it sits on the dashboard card. The photo
+         itself is a tap target (full-screen viewer); the face opens the
+         native info sheet. -->
+    <FrameLayout
+        android:id="@+id/notif_thumb_wrap"
         android:layout_width="match_parent"
         android:layout_height="160dp"
-        android:layout_marginTop="10dp"
-        android:scaleType="centerCrop"
-        android:adjustViewBounds="true"
-        android:contentDescription="@null" />
+        android:layout_marginTop="10dp">
+
+        <ImageView
+            android:id="@+id/notif_thumb"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scaleType="centerCrop"
+            android:contentDescription="@null" />
+
+        <ImageView
+            android:id="@+id/notif_face_btn"
+            android:layout_width="30dp"
+            android:layout_height="30dp"
+            android:layout_gravity="top|end"
+            android:layout_margin="8dp"
+            android:padding="5dp"
+            android:background="@drawable/bg_face_btn"
+            android:src="@drawable/ic_face_flat"
+            android:visibility="gone"
+            android:contentDescription="Listing details" />
+    </FrameLayout>
 
 </LinearLayout>
