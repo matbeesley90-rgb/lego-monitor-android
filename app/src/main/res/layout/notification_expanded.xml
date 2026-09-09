@@ -48,15 +48,18 @@
         <!-- Grail tab: violet, rounded bottom corners, golden-brick mark +
              one word. Tap → the grail's own catalogue page. GONE unless
              the payload carries a `grail` block. -->
+        <!-- 2026-09-09: the tab starts at the very top and its first 6dp
+             sit ON the banner (same violet), so there can be no seam
+             between banner and tab whatever the compositor rounds. -->
         <LinearLayout
             android:id="@+id/notif_grail_tab"
             android:layout_width="wrap_content"
-            android:layout_height="18dp"
+            android:layout_height="24dp"
             android:layout_gravity="top|end"
-            android:layout_marginTop="6dp"
             android:layout_marginEnd="10dp"
             android:orientation="horizontal"
             android:gravity="center_vertical"
+            android:paddingTop="6dp"
             android:paddingStart="7dp"
             android:paddingEnd="8dp"
             android:background="@drawable/bg_grail_tab"
@@ -148,8 +151,10 @@
         android:layout_marginTop="2dp" />
 
 
-    <!-- Grid row 1: New prices -->
+    <!-- Grid row 1: New prices (id'd 2026-09-09 so the in-card info block
+         can hide the grid while it is open — the height cap is tight) -->
     <LinearLayout
+        android:id="@+id/notif_row1"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
@@ -280,7 +285,7 @@
         android:id="@+id/notif_info_block"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="10dp"
+        android:layout_marginTop="6dp"
         android:orientation="vertical"
         android:visibility="gone">
 
@@ -698,10 +703,10 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:layout_marginTop="10dp"
+            android:layout_marginTop="6dp"
             android:gravity="center_vertical"
-            android:paddingTop="6dp"
-            android:paddingBottom="6dp">
+            android:paddingTop="4dp"
+            android:paddingBottom="2dp">
             <ImageView
                 android:id="@+id/notif_info_vision_icon"
                 android:layout_width="16dp"

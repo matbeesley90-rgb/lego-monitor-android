@@ -249,6 +249,11 @@ object V4NotificationRenderer {
             collapsed.setInt(R.id.notif_collapsed_stripe,
                 "setBackgroundColor", violet)
             collapsed.setViewVisibility(R.id.notif_grail_tab, View.VISIBLE)
+            // The collapsed tab hangs over the title row's right end —
+            // reserve that width so the fig head is never under it
+            // (2026-09-09: it cut the head off).
+            collapsed.setViewPadding(R.id.notif_title_row, 0, 0,
+                (72 * ctx.resources.displayMetrics.density).toInt(), 0)
             if (grail.catalogueUrl.isNotBlank()) {
                 val pi = openInAppIntent(ctx, grail.catalogueUrl, "grail:" + p.listingId)
                 expanded.setOnClickPendingIntent(R.id.notif_grail_tab, pi)
@@ -257,6 +262,7 @@ object V4NotificationRenderer {
         } else {
             expanded.setViewVisibility(R.id.notif_grail_tab, View.GONE)
             collapsed.setViewVisibility(R.id.notif_grail_tab, View.GONE)
+            collapsed.setViewPadding(R.id.notif_title_row, 0, 0, 0, 0)
         }
 
         // ── In-place modes (2026-09-09): info block / photo size ───────
@@ -271,8 +277,18 @@ object V4NotificationRenderer {
         val hasIds = p.listingId.isNotBlank() && p.apiBase.isNotBlank()
         if (mode.infoOpen && card != null) {
             expanded.setViewVisibility(R.id.notif_thumb_wrap, View.GONE)
+            // The system caps a notification's height (the photo version
+            // sits just under it). With the block open, the price grid and
+            // tier footer hide too — the block's table carries the same
+            // references — so the whole block fits (2026-09-09: it was
+            // cut off after "Seller says").
+            expanded.setViewVisibility(R.id.notif_row1, View.GONE)
+            expanded.setViewVisibility(R.id.notif_row2, View.GONE)
+            expanded.setViewVisibility(R.id.notif_footer_row, View.GONE)
             expanded.setViewVisibility(R.id.notif_info_block, View.VISIBLE)
             fillInfoBlock(expanded, card)
+            // The fig LIST lives in the full sheet; the summary line opens it.
+            expanded.setOnClickPendingIntent(R.id.notif_info_figs_line, infoSheetIntent(ctx, p))
             expanded.setImageViewResource(R.id.notif_info_close, faceDrawable(p.face))
             expanded.setInt(R.id.notif_info_close, "setColorFilter", faceColor(p.face))
             expanded.setOnClickPendingIntent(R.id.notif_info_close,
@@ -471,7 +487,17 @@ object V4NotificationRenderer {
 
         addAction(ctx, builder, "Listing",   p.listingUrl,   p.kind, msgIdSuffix = "L")
         addAction(ctx, builder, "Monitor",   p.monitorUrl,   p.kind, msgIdSuffix = "M")
-        addAction(ctx, builder, "Catalogue", p.catalogueUrl, p.kind, msgIdSuffix = "C")
+        // Third button: a set's catalogue page, or — for bundles, which
+        // have no set page — VISION (Mat, 2026-09-09), opening the native
+        // vision bottom sheet rather than the web fig-breakdown page.
+        val wantsVision = p.kind == "bundle" || p.catalogueUrl.contains("/vision")
+        if (wantsVision && p.listingId.isNotBlank() && p.apiBase.isNotBlank()) {
+            builder.addAction(0, "Vision", visionSheetIntent(ctx, p))
+        } else if (wantsVision) {
+            addAction(ctx, builder, "Vision", p.catalogueUrl, p.kind, msgIdSuffix = "C")
+        } else {
+            addAction(ctx, builder, "Catalogue", p.catalogueUrl, p.kind, msgIdSuffix = "C")
+        }
 
         ctx.getSystemService(NotificationManager::class.java)
             .notify(notifId, builder.build())
@@ -862,10 +888,14 @@ object V4NotificationRenderer {
             }
         }
 
-        line(R.id.notif_info_figs_line, c.figsLine, "ink")
+        line(R.id.notif_info_figs_line, if (c.figsLine.isBlank()) "" else c.figsLine + "  ▸", "ink")
+        // Individual fig rows only when there is no table to make room for
+        // (no-match / bundle cards); with a table they'd push the block
+        // past the height cap. Tap the summary line for the full list.
+        val showFigRows = c.table.isEmpty()
         for (i in FIG_ROWS.indices) {
             val ids = FIG_ROWS[i]
-            val f = c.figs.getOrNull(i)
+            val f = if (showFigRows && i < 3) c.figs.getOrNull(i) else null
             if (f == null) { rv.setViewVisibility(ids.row, View.GONE); continue }
             rv.setViewVisibility(ids.row, View.VISIBLE)
             rv.setTextViewText(ids.l, f.getOrNull(0) ?: "")
