@@ -758,8 +758,8 @@
         <ImageView
             android:id="@+id/notif_thumb_big"
             android:layout_width="match_parent"
-            android:layout_height="270dp"
-            android:scaleType="centerCrop"
+            android:layout_height="236dp"
+            android:scaleType="fitCenter"
             android:visibility="gone"
             android:contentDescription="@null" />
 

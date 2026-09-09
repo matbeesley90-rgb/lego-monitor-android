@@ -22,6 +22,7 @@ class CardActionReceiver : BroadcastReceiver() {
         val mode = V4NotificationRenderer.CardMode(
             photoBig = intent.getBooleanExtra(EXTRA_PHOTO_BIG, false),
             infoOpen = intent.getBooleanExtra(EXTRA_INFO_OPEN, false),
+            infoPage = intent.getIntExtra(EXTRA_INFO_PAGE, 0),
         )
         Log.d("LegoV4", "redraw ${payload.listingId} mode=$mode")
         V4NotificationRenderer.show(ctx.applicationContext, frame, payload, mode)
@@ -32,5 +33,6 @@ class CardActionReceiver : BroadcastReceiver() {
         const val EXTRA_FRAME = "frame"
         const val EXTRA_PHOTO_BIG = "photo_big"
         const val EXTRA_INFO_OPEN = "info_open"
+        const val EXTRA_INFO_PAGE = "info_page"
     }
 }

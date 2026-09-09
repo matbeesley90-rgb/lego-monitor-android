@@ -49,7 +49,10 @@ object V4NotificationRenderer {
     /** In-place card modes (2026-09-09): a tap on the photo or the info
      *  face re-posts the SAME notification with the card redrawn, so the
      *  shade never closes. Fired through CardActionReceiver. */
-    data class CardMode(val photoBig: Boolean = false, val infoOpen: Boolean = false)
+    /** infoPage: 0 = reference notes, 1 = the fig list (the block can't
+     *  scroll, so it pages in place). */
+    data class CardMode(val photoBig: Boolean = false, val infoOpen: Boolean = false,
+                        val infoPage: Int = 0)
 
     // Decoded thumbnails by URL so an in-place redraw is instant (no
     // placeholder flash). Tiny LRU: a handful of live cards at most.
@@ -286,15 +289,23 @@ object V4NotificationRenderer {
             expanded.setViewVisibility(R.id.notif_row2, View.GONE)
             expanded.setViewVisibility(R.id.notif_footer_row, View.GONE)
             expanded.setViewVisibility(R.id.notif_info_block, View.VISIBLE)
-            fillInfoBlock(expanded, card)
-            // The fig LIST lives in the full sheet; the summary line opens it.
-            expanded.setOnClickPendingIntent(R.id.notif_info_figs_line, infoSheetIntent(ctx, p))
+            val page = if (card.figs.isNotEmpty()) mode.infoPage else 0
+            fillInfoBlock(expanded, card, page)
+            // Page flip in place: the minifigs line → the fig list page; its
+            // "◂ Reference notes" line → back. "+N more" → the full sheet.
+            if (card.figs.isNotEmpty()) {
+                expanded.setOnClickPendingIntent(R.id.notif_info_figs_line,
+                    redrawIntent(ctx, p, frameJson, mode.copy(infoPage = if (page == 0) 1 else 0), "info-page"))
+            }
+            if (page == 1) {
+                expanded.setOnClickPendingIntent(R.id.notif_info_set, infoSheetIntent(ctx, p))
+            }
             expanded.setImageViewResource(R.id.notif_info_close, faceDrawable(p.face))
             expanded.setInt(R.id.notif_info_close, "setColorFilter", faceColor(p.face))
             expanded.setOnClickPendingIntent(R.id.notif_info_close,
                 redrawIntent(ctx, p, frameJson, mode.copy(infoOpen = false), "info-close"))
             expanded.setOnClickPendingIntent(R.id.notif_info_vision, visionSheetIntent(ctx, p))
-            if (card.setUrl.isNotBlank()) {
+            if (card.setUrl.isNotBlank() && page == 0) {
                 expanded.setOnClickPendingIntent(R.id.notif_info_set,
                     openInAppIntent(ctx, card.setUrl, "set:" + p.listingId))
             }
@@ -305,6 +316,15 @@ object V4NotificationRenderer {
                 if (mode.photoBig) View.GONE else View.VISIBLE)
             expanded.setViewVisibility(R.id.notif_thumb_big,
                 if (mode.photoBig) View.VISIBLE else View.GONE)
+            if (mode.photoBig) {
+                // Same height cap as the info block: give the taller photo
+                // the grid's and footer's room, and show it WHOLE
+                // (fitCenter) rather than a centre crop that only looked
+                // zoomed (2026-09-09).
+                expanded.setViewVisibility(R.id.notif_row1, View.GONE)
+                expanded.setViewVisibility(R.id.notif_row2, View.GONE)
+                expanded.setViewVisibility(R.id.notif_footer_row, View.GONE)
+            }
             if (p.imageUrl.isNotBlank() && frameJson.isNotBlank()) {
                 val flip = redrawIntent(ctx, p, frameJson,
                     mode.copy(photoBig = !mode.photoBig), "photo")
@@ -814,6 +834,7 @@ object V4NotificationRenderer {
             putExtra(CardActionReceiver.EXTRA_FRAME, frameJson)
             putExtra(CardActionReceiver.EXTRA_PHOTO_BIG, mode.photoBig)
             putExtra(CardActionReceiver.EXTRA_INFO_OPEN, mode.infoOpen)
+            putExtra(CardActionReceiver.EXTRA_INFO_PAGE, mode.infoPage)
         }
         return PendingIntent.getBroadcast(
             ctx, ("redraw:$what:" + p.listingId).hashCode(), i,
@@ -852,8 +873,9 @@ object V4NotificationRenderer {
         RowIds(R.id.notif_info_f4, R.id.notif_info_f4_num, R.id.notif_info_f4_name, R.id.notif_info_f4_val),
     )
 
-    /** Fill the in-card info block from the Pi's pre-rendered strings. */
-    private fun fillInfoBlock(rv: RemoteViews, c: InfoCard) {
+    /** Fill the in-card info block from the Pi's pre-rendered strings.
+     *  page 0 = reference notes (+ table), page 1 = the fig list. */
+    private fun fillInfoBlock(rv: RemoteViews, c: InfoCard, page: Int = 0) {
         val blue = Color.parseColor("#4A9EFF"); val warn = Color.parseColor("#F2B35A")
         val ok = Color.parseColor("#4CC38A"); val sub = Color.parseColor("#9AA0A6")
         val ink = Color.parseColor("#F2F2F2")
@@ -863,6 +885,32 @@ object V4NotificationRenderer {
             rv.setTextViewText(id, text)
             rv.setTextColor(id, when (kind) { "warn" -> warn; "ok" -> ok; "ink" -> ink; else -> sub })
         }
+
+        if (page == 1) {
+            // ── Fig list page ──
+            rv.setTextViewText(R.id.notif_info_head, c.figsLine.uppercase())
+            val extra = c.figs.size - FIG_ROWS.size
+            line(R.id.notif_info_set,
+                if (extra > 0) "+$extra more in the full sheet ▸" else "", "")
+            rv.setViewVisibility(R.id.notif_info_l1, View.GONE)
+            rv.setViewVisibility(R.id.notif_info_l2, View.GONE)
+            rv.setViewVisibility(R.id.notif_info_table, View.GONE)
+            for (i in FIG_ROWS.indices) {
+                val ids = FIG_ROWS[i]
+                val f = c.figs.getOrNull(i)
+                if (f == null) { rv.setViewVisibility(ids.row, View.GONE); continue }
+                rv.setViewVisibility(ids.row, View.VISIBLE)
+                rv.setTextViewText(ids.l, f.getOrNull(0) ?: "")
+                rv.setTextViewText(ids.a, f.getOrNull(1) ?: "")
+                rv.setTextViewText(ids.b, f.getOrNull(2) ?: "")
+            }
+            line(R.id.notif_info_figs_line, "◂ Reference notes", "")
+            fillVisionRow(rv, c)
+            return
+        }
+
+        rv.setTextViewText(R.id.notif_info_head, "REFERENCE NOTES")
+        rv.setViewVisibility(R.id.notif_info_set, View.VISIBLE)
         rv.setTextViewText(R.id.notif_info_set, c.setLine)
         rv.setTextColor(R.id.notif_info_set, if (c.setUrl.isNotBlank()) blue else ink)
         line(R.id.notif_info_l1, c.line1, c.line1Kind.ifBlank { "warn" })
@@ -888,21 +936,16 @@ object V4NotificationRenderer {
             }
         }
 
-        line(R.id.notif_info_figs_line, if (c.figsLine.isBlank()) "" else c.figsLine + "  ▸", "ink")
-        // Individual fig rows only when there is no table to make room for
-        // (no-match / bundle cards); with a table they'd push the block
-        // past the height cap. Tap the summary line for the full list.
-        val showFigRows = c.table.isEmpty()
-        for (i in FIG_ROWS.indices) {
-            val ids = FIG_ROWS[i]
-            val f = if (showFigRows && i < 3) c.figs.getOrNull(i) else null
-            if (f == null) { rv.setViewVisibility(ids.row, View.GONE); continue }
-            rv.setViewVisibility(ids.row, View.VISIBLE)
-            rv.setTextViewText(ids.l, f.getOrNull(0) ?: "")
-            rv.setTextViewText(ids.a, f.getOrNull(1) ?: "")
-            rv.setTextViewText(ids.b, f.getOrNull(2) ?: "")
-        }
+        // The fig LIST is page 1 (the block can't scroll); here just the
+        // summary line, which flips the page.
+        line(R.id.notif_info_figs_line,
+            if (c.figsLine.isBlank()) "" else c.figsLine + "  ▸", "ink")
+        for (ids in FIG_ROWS) rv.setViewVisibility(ids.row, View.GONE)
+        fillVisionRow(rv, c)
+    }
 
+    private fun fillVisionRow(rv: RemoteViews, c: InfoCard) {
+        val ok = Color.parseColor("#4CC38A")
         rv.setTextViewText(R.id.notif_info_vision_txt, c.visionLine.ifBlank { "Run vision" })
         val vc = when (c.visionKind) {
             "good" -> ok
