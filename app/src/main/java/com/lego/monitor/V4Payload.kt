@@ -209,6 +209,10 @@ data class InfoCard(
     val facts: List<List<String>> = emptyList(),
     val quotes: List<String> = emptyList(),
     val saysKind: String = "",
+    // DEAL CHECK (2026-09-09): fixed rows [label, value, kind] — Condition,
+    // Value, Figs, You pay, Seller, Vision, Grail. checkKind colours the icon.
+    val rows: List<List<String>> = emptyList(),
+    val checkKind: String = "",
 ) {
     companion object {
         private fun strings(a: org.json.JSONArray?): List<String> =
@@ -235,6 +239,8 @@ data class InfoCard(
                 facts      = rows(o.optJSONArray("facts")),
                 quotes     = strings(o.optJSONArray("quotes")),
                 saysKind   = o.optString("says_kind", ""),
+                rows       = rows(o.optJSONArray("rows")),
+                checkKind  = o.optString("check_kind", ""),
             )
         }
     }

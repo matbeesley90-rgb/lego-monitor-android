@@ -287,8 +287,8 @@ object V4NotificationRenderer {
             fillInfoBlock(expanded, card)
             // "Full details ▸" → the info window (the dashboard's sheet).
             expanded.setOnClickPendingIntent(R.id.notif_info_figs_line, infoSheetIntent(ctx, p))
-            expanded.setImageViewResource(R.id.notif_info_close, R.drawable.ic_seller_says)
-            expanded.setInt(R.id.notif_info_close, "setColorFilter", saysColor(card.saysKind))
+            expanded.setImageViewResource(R.id.notif_info_close, R.drawable.ic_deal_check)
+            expanded.setInt(R.id.notif_info_close, "setColorFilter", saysColor(card.checkKind))
             expanded.setOnClickPendingIntent(R.id.notif_info_close,
                 redrawIntent(ctx, p, frameJson, mode.copy(infoOpen = false), "info-close"))
             expanded.setOnClickPendingIntent(R.id.notif_info_vision, visionSheetIntent(ctx, p))
@@ -321,9 +321,9 @@ object V4NotificationRenderer {
                 // Speech bubble = "what the seller says" (2026-09-09); amber
                 // when something is missing, green when they say complete.
                 expanded.setImageViewResource(R.id.notif_face_btn,
-                    if (card != null) R.drawable.ic_seller_says else faceDrawable(p.face))
+                    if (card != null) R.drawable.ic_deal_check else faceDrawable(p.face))
                 expanded.setInt(R.id.notif_face_btn, "setColorFilter",
-                    if (card != null) saysColor(card.saysKind) else faceColor(p.face))
+                    if (card != null) saysColor(card.checkKind) else faceColor(p.face))
                 expanded.setOnClickPendingIntent(R.id.notif_face_btn,
                     if (card != null && frameJson.isNotBlank())
                         redrawIntent(ctx, p, frameJson, mode.copy(infoOpen = true), "info-open")
@@ -864,46 +864,38 @@ object V4NotificationRenderer {
     )
 
     private fun saysColor(kind: String): Int = Color.parseColor(when (kind) {
-        "warn" -> "#F2B35A"
-        "ok"   -> "#4CC38A"
-        else   -> "#C9C9C9"
+        "warn"  -> "#F2B35A"
+        "ok"    -> "#4CC38A"
+        "grail" -> "#9A82FF"
+        else    -> "#C9C9C9"
     })
 
-    /** The "SELLER SAYS" quick card (2026-09-09): up to three short facts
-     *  (missing box / instructions / complete / fig count), up to three of
-     *  the seller's own sentences, the vision line, and a link to the full
-     *  sheet. No title, no table — those live in the sheet. */
+    /** DEAL CHECK (2026-09-09, Mat: "the information necessary to make an
+     *  informed decision — tidy and uniform"). Fixed label column, one line
+     *  per row, colour only where it changes the decision. The rows come
+     *  ready-made from the Pi so this is pure layout. */
     private fun fillInfoBlock(rv: RemoteViews, c: InfoCard) {
-        val warn = Color.parseColor("#F2B35A"); val ok = Color.parseColor("#4CC38A")
-        val sub = Color.parseColor("#9AA0A6"); val ink = Color.parseColor("#F2F2F2")
-        val dim = Color.parseColor("#6A6F75")
-        fun colour(kind: String) = when (kind) { "warn" -> warn; "ok" -> ok; else -> ink }
-        rv.setTextViewText(R.id.notif_info_head, "SELLER SAYS")
-        val factIds = intArrayOf(R.id.notif_info_set, R.id.notif_info_l1, R.id.notif_info_l2)
-        for (i in factIds.indices) {
-            val f = c.facts.getOrNull(i)
-            if (f == null || f.isEmpty() || f[0].isBlank()) { rv.setViewVisibility(factIds[i], View.GONE); continue }
-            rv.setViewVisibility(factIds[i], View.VISIBLE)
-            rv.setTextViewText(factIds[i], f[0])
-            rv.setTextColor(factIds[i], colour(f.getOrNull(1) ?: ""))
+        val dim = Color.parseColor("#8A9099"); val ink = Color.parseColor("#F2F2F2")
+        rv.setTextViewText(R.id.notif_info_head, "DEAL CHECK")
+        for (id in intArrayOf(R.id.notif_info_set, R.id.notif_info_l1, R.id.notif_info_l2)) {
+            rv.setViewVisibility(id, View.GONE)
         }
         rv.setViewVisibility(R.id.notif_info_table, View.GONE)
-        // The seller's own words, one per row, opening quote in the first column.
         for (i in FIG_ROWS.indices) {
             val ids = FIG_ROWS[i]
-            val q = c.quotes.getOrNull(i)
-            if (q == null || q.isBlank()) { rv.setViewVisibility(ids.row, View.GONE); continue }
+            val row = c.rows.getOrNull(i)
+            if (row == null || row.size < 2 || row[1].isBlank()) { rv.setViewVisibility(ids.row, View.GONE); continue }
             rv.setViewVisibility(ids.row, View.VISIBLE)
-            rv.setTextViewText(ids.l, "\u201C")
+            rv.setTextViewText(ids.l, row[0])
             rv.setTextColor(ids.l, dim)
-            rv.setTextViewText(ids.a, q)
-            rv.setTextColor(ids.a, sub)
+            rv.setTextViewText(ids.a, row[1])
+            rv.setTextColor(ids.a, if ((row.getOrNull(2) ?: "").isBlank()) ink else saysColor(row[2]))
             rv.setTextViewText(ids.b, "")
         }
         rv.setViewVisibility(R.id.notif_info_figs_line, View.VISIBLE)
         rv.setTextViewText(R.id.notif_info_figs_line, "Full details ▸")
         rv.setTextColor(R.id.notif_info_figs_line, Color.parseColor("#4A9EFF"))
-        fillVisionRow(rv, c)
+        rv.setViewVisibility(R.id.notif_info_vision, View.GONE)
     }
 
     private fun fillVisionRow(rv: RemoteViews, c: InfoCard) {

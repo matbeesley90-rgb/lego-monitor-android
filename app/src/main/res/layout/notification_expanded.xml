@@ -541,7 +541,7 @@
                 android:layout_height="wrap_content"
                 android:textSize="12sp"
                 android:textColor="#4A9EFF"
-                android:minWidth="60dp" />
+                android:minWidth="66dp" />
             <TextView
                 android:id="@+id/notif_info_f0_name"
                 android:layout_width="0dp"
@@ -575,7 +575,7 @@
                 android:layout_height="wrap_content"
                 android:textSize="12sp"
                 android:textColor="#4A9EFF"
-                android:minWidth="60dp" />
+                android:minWidth="66dp" />
             <TextView
                 android:id="@+id/notif_info_f1_name"
                 android:layout_width="0dp"
@@ -609,7 +609,7 @@
                 android:layout_height="wrap_content"
                 android:textSize="12sp"
                 android:textColor="#4A9EFF"
-                android:minWidth="60dp" />
+                android:minWidth="66dp" />
             <TextView
                 android:id="@+id/notif_info_f2_name"
                 android:layout_width="0dp"
@@ -643,7 +643,7 @@
                 android:layout_height="wrap_content"
                 android:textSize="12sp"
                 android:textColor="#4A9EFF"
-                android:minWidth="60dp" />
+                android:minWidth="66dp" />
             <TextView
                 android:id="@+id/notif_info_f3_name"
                 android:layout_width="0dp"
@@ -677,7 +677,7 @@
                 android:layout_height="wrap_content"
                 android:textSize="12sp"
                 android:textColor="#4A9EFF"
-                android:minWidth="60dp" />
+                android:minWidth="66dp" />
             <TextView
                 android:id="@+id/notif_info_f4_name"
                 android:layout_width="0dp"
