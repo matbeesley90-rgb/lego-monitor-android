@@ -325,11 +325,13 @@ object V4NotificationRenderer {
                 expanded.setViewVisibility(R.id.notif_row2, View.GONE)
                 expanded.setViewVisibility(R.id.notif_footer_row, View.GONE)
             }
-            if (p.imageUrl.isNotBlank() && frameJson.isNotBlank()) {
-                val flip = redrawIntent(ctx, p, frameJson,
-                    mode.copy(photoBig = !mode.photoBig), "photo")
-                expanded.setOnClickPendingIntent(R.id.notif_thumb, flip)
-                expanded.setOnClickPendingIntent(R.id.notif_thumb_big, flip)
+            // Photo tap → the in-app window: photo large, info box under it
+            // (Mat, 2026-09-09: growing the card was "no better" under the
+            // height cap). The in-place big-photo mode is kept in code but
+            // no longer wired to a tap.
+            if (hasIds) {
+                expanded.setOnClickPendingIntent(R.id.notif_thumb, infoSheetIntent(ctx, p))
+                expanded.setOnClickPendingIntent(R.id.notif_thumb_big, infoSheetIntent(ctx, p))
             }
             if (hasIds) {
                 expanded.setViewVisibility(R.id.notif_face_btn, View.VISIBLE)
@@ -841,21 +843,12 @@ object V4NotificationRenderer {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
     }
 
-    /** The vision bottom sheet — InfoSheetActivity in vision-only mode. */
+    /** Vision = the monitor's own fig-breakdown page (/vision?id=), opened
+     *  inside the app's WebView (Mat, 2026-09-09: "vision should open up
+     *  this page"). */
     private fun visionSheetIntent(ctx: Context, p: V4Payload): PendingIntent {
-        val i = Intent(ctx, InfoSheetActivity::class.java).apply {
-            putExtra(InfoSheetActivity.EXTRA_MODE, InfoSheetActivity.MODE_VISION)
-            putExtra(InfoSheetActivity.EXTRA_LISTING_ID, p.listingId)
-            putExtra(InfoSheetActivity.EXTRA_API_BASE, p.apiBase)
-            putExtra(InfoSheetActivity.EXTRA_TITLE, p.sellerTitle.ifBlank { p.setName })
-            putExtra(InfoSheetActivity.EXTRA_BRAND, brandLabel(p.brand))
-            putExtra(InfoSheetActivity.EXTRA_ASKING, p.asking)
-            putExtra(InfoSheetActivity.EXTRA_TRUE_COST, p.trueCost)
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-        return PendingIntent.getActivity(
-            ctx, ("vision:" + p.listingId).hashCode(), i,
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        val url = "${p.apiBase.trimEnd('/')}/vision?id=${Uri.encode(p.listingId)}"
+        return openInAppIntent(ctx, url, "vision:" + p.listingId)
     }
 
     private data class RowIds(val row: Int, val l: Int, val a: Int, val b: Int)

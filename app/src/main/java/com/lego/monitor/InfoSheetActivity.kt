@@ -127,6 +127,35 @@ class InfoSheetActivity : AppCompatActivity() {
             background = GradientDrawable().apply { setColor(Color.parseColor("#4A4B50")); cornerRadius = dpF(2) }
         }, LinearLayout.LayoutParams(dp(36), dp(4)).apply { gravity = Gravity.CENTER_HORIZONTAL; bottomMargin = dp(10) })
 
+        // Photo, large, at the top (2026-09-09: tapping the notification
+        // photo opens this window — photo first, info box underneath).
+        // Tap it for the pinch-zoom viewer.
+        val photoUrl = intent.getStringExtra(EXTRA_PHOTO_URL).orEmpty()
+        if (photoUrl.isNotBlank() && !visionOnly) {
+            val img = ImageView(this).apply {
+                scaleType = ImageView.ScaleType.CENTER_CROP
+                setBackgroundColor(Color.parseColor("#141518"))
+                background = GradientDrawable().apply { setColor(Color.parseColor("#141518")); cornerRadius = dpF(12) }
+                clipToOutline = true
+                setOnClickListener {
+                    startActivity(Intent(this@InfoSheetActivity, PhotoViewerActivity::class.java)
+                        .putExtra(PhotoViewerActivity.EXTRA_URL, photoUrl)
+                        .putExtra(PhotoViewerActivity.EXTRA_TITLE, sellerTitle)
+                        .putExtra(PhotoViewerActivity.EXTRA_SUB, brand))
+                }
+            }
+            val h = (resources.displayMetrics.heightPixels * 0.36f).toInt()
+            panel.addView(img, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, h).apply { bottomMargin = dp(12) })
+            Thread {
+                val bmp = try {
+                    http.newCall(Request.Builder().url(photoUrl).get().build()).execute().use { r ->
+                        r.body?.bytes()?.let { android.graphics.BitmapFactory.decodeByteArray(it, 0, it.size) }
+                    }
+                } catch (_: Exception) { null }
+                if (bmp != null) ui.post { img.setImageBitmap(bmp) }
+            }.start()
+        }
+
         // Header
         panel.addView(text(sellerTitle.ifBlank { "Listing" }, 15f, cInk, bold = true).apply { maxLines = 3 })
         val sub = buildString {
@@ -179,7 +208,7 @@ class InfoSheetActivity : AppCompatActivity() {
             setOnClickListener { openInMonitor(monitorUrl) }
         })
 
-        val scroll = MaxHeightScrollView(this, (resources.displayMetrics.heightPixels * 0.88f).toInt()).apply {
+        val scroll = MaxHeightScrollView(this, (resources.displayMetrics.heightPixels * 0.94f).toInt()).apply {
             isFillViewport = false
             addView(panel, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         }
@@ -346,6 +375,12 @@ class InfoSheetActivity : AppCompatActivity() {
                 (if (ratio > 0) " · ${"%.1f".format(ratio)}×" else "") +
                 (if (v.optInt("unknown_figs", 0) > 0) " · ${v.optInt("unknown_figs")} unidentified" else ""),
                 if (good) cGreen else cAmber, bold = true))
+            // The monitor's fig-breakdown page (thumbnails, per-fig prices,
+            // tap-to-correct) is the real thing — link to it in the app.
+            box.addView(text("Full breakdown with photos ▸", 13f, cBlue).apply {
+                setPadding(0, dp(2), 0, dp(6))
+                setOnClickListener { openInMonitor("$apiBase/vision?id=${enc(listingId)}") }
+            })
             val matched = v.optJSONArray("matched")
             if (matched != null) for (i in 0 until matched.length()) {
                 val m = matched.optJSONObject(i) ?: continue
