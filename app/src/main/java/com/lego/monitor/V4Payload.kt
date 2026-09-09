@@ -204,6 +204,11 @@ data class InfoCard(
     val figs: List<List<String>>,
     val visionLine: String,
     val visionKind: String,
+    // "Seller says" quick card (2026-09-09): short facts [text, kind] and
+    // up to three of the seller's own sentences. saysKind colours the icon.
+    val facts: List<List<String>> = emptyList(),
+    val quotes: List<String> = emptyList(),
+    val saysKind: String = "",
 ) {
     companion object {
         private fun strings(a: org.json.JSONArray?): List<String> =
@@ -227,6 +232,9 @@ data class InfoCard(
                 figs       = rows(o.optJSONArray("figs")),
                 visionLine = o.optString("vision_line", ""),
                 visionKind = o.optString("vision_kind", ""),
+                facts      = rows(o.optJSONArray("facts")),
+                quotes     = strings(o.optJSONArray("quotes")),
+                saysKind   = o.optString("says_kind", ""),
             )
         }
     }

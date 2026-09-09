@@ -284,26 +284,14 @@ object V4NotificationRenderer {
             expanded.setViewVisibility(R.id.notif_row2, View.GONE)
             expanded.setViewVisibility(R.id.notif_footer_row, View.GONE)
             expanded.setViewVisibility(R.id.notif_info_block, View.VISIBLE)
-            val page = if (card.figs.isNotEmpty()) mode.infoPage else 0
-            fillInfoBlock(expanded, card, page)
-            // Page flip in place: the minifigs line → the fig list page; its
-            // "◂ Reference notes" line → back. "+N more" → the full sheet.
-            if (card.figs.isNotEmpty()) {
-                expanded.setOnClickPendingIntent(R.id.notif_info_figs_line,
-                    redrawIntent(ctx, p, frameJson, mode.copy(infoPage = if (page == 0) 1 else 0), "info-page"))
-            }
-            if (page == 1) {
-                expanded.setOnClickPendingIntent(R.id.notif_info_set, infoSheetIntent(ctx, p))
-            }
-            expanded.setImageViewResource(R.id.notif_info_close, faceDrawable(p.face))
-            expanded.setInt(R.id.notif_info_close, "setColorFilter", faceColor(p.face))
+            fillInfoBlock(expanded, card)
+            // "Full details ▸" → the info window (the dashboard's sheet).
+            expanded.setOnClickPendingIntent(R.id.notif_info_figs_line, infoSheetIntent(ctx, p))
+            expanded.setImageViewResource(R.id.notif_info_close, R.drawable.ic_seller_says)
+            expanded.setInt(R.id.notif_info_close, "setColorFilter", saysColor(card.saysKind))
             expanded.setOnClickPendingIntent(R.id.notif_info_close,
                 redrawIntent(ctx, p, frameJson, mode.copy(infoOpen = false), "info-close"))
             expanded.setOnClickPendingIntent(R.id.notif_info_vision, visionSheetIntent(ctx, p))
-            if (card.setUrl.isNotBlank() && page == 0) {
-                expanded.setOnClickPendingIntent(R.id.notif_info_set,
-                    openInAppIntent(ctx, card.setUrl, "set:" + p.listingId))
-            }
         } else {
             expanded.setViewVisibility(R.id.notif_info_block, View.GONE)
             expanded.setViewVisibility(R.id.notif_thumb_wrap, View.VISIBLE)
@@ -330,8 +318,12 @@ object V4NotificationRenderer {
             }
             if (hasIds) {
                 expanded.setViewVisibility(R.id.notif_face_btn, View.VISIBLE)
-                expanded.setImageViewResource(R.id.notif_face_btn, faceDrawable(p.face))
-                expanded.setInt(R.id.notif_face_btn, "setColorFilter", faceColor(p.face))
+                // Speech bubble = "what the seller says" (2026-09-09); amber
+                // when something is missing, green when they say complete.
+                expanded.setImageViewResource(R.id.notif_face_btn,
+                    if (card != null) R.drawable.ic_seller_says else faceDrawable(p.face))
+                expanded.setInt(R.id.notif_face_btn, "setColorFilter",
+                    if (card != null) saysColor(card.saysKind) else faceColor(p.face))
                 expanded.setOnClickPendingIntent(R.id.notif_face_btn,
                     if (card != null && frameJson.isNotBlank())
                         redrawIntent(ctx, p, frameJson, mode.copy(infoOpen = true), "info-open")
@@ -871,74 +863,46 @@ object V4NotificationRenderer {
         RowIds(R.id.notif_info_f4, R.id.notif_info_f4_num, R.id.notif_info_f4_name, R.id.notif_info_f4_val),
     )
 
-    /** Fill the in-card info block from the Pi's pre-rendered strings.
-     *  page 0 = reference notes (+ table), page 1 = the fig list. */
-    private fun fillInfoBlock(rv: RemoteViews, c: InfoCard, page: Int = 0) {
-        val blue = Color.parseColor("#4A9EFF"); val warn = Color.parseColor("#F2B35A")
-        val ok = Color.parseColor("#4CC38A"); val sub = Color.parseColor("#9AA0A6")
-        val ink = Color.parseColor("#F2F2F2")
-        fun line(id: Int, text: String, kind: String) {
-            if (text.isBlank()) { rv.setViewVisibility(id, View.GONE); return }
-            rv.setViewVisibility(id, View.VISIBLE)
-            rv.setTextViewText(id, text)
-            rv.setTextColor(id, when (kind) { "warn" -> warn; "ok" -> ok; "ink" -> ink; else -> sub })
+    private fun saysColor(kind: String): Int = Color.parseColor(when (kind) {
+        "warn" -> "#F2B35A"
+        "ok"   -> "#4CC38A"
+        else   -> "#C9C9C9"
+    })
+
+    /** The "SELLER SAYS" quick card (2026-09-09): up to three short facts
+     *  (missing box / instructions / complete / fig count), up to three of
+     *  the seller's own sentences, the vision line, and a link to the full
+     *  sheet. No title, no table — those live in the sheet. */
+    private fun fillInfoBlock(rv: RemoteViews, c: InfoCard) {
+        val warn = Color.parseColor("#F2B35A"); val ok = Color.parseColor("#4CC38A")
+        val sub = Color.parseColor("#9AA0A6"); val ink = Color.parseColor("#F2F2F2")
+        val dim = Color.parseColor("#6A6F75")
+        fun colour(kind: String) = when (kind) { "warn" -> warn; "ok" -> ok; else -> ink }
+        rv.setTextViewText(R.id.notif_info_head, "SELLER SAYS")
+        val factIds = intArrayOf(R.id.notif_info_set, R.id.notif_info_l1, R.id.notif_info_l2)
+        for (i in factIds.indices) {
+            val f = c.facts.getOrNull(i)
+            if (f == null || f.isEmpty() || f[0].isBlank()) { rv.setViewVisibility(factIds[i], View.GONE); continue }
+            rv.setViewVisibility(factIds[i], View.VISIBLE)
+            rv.setTextViewText(factIds[i], f[0])
+            rv.setTextColor(factIds[i], colour(f.getOrNull(1) ?: ""))
         }
-
-        if (page == 1) {
-            // ── Fig list page ──
-            rv.setTextViewText(R.id.notif_info_head, c.figsLine.uppercase())
-            val extra = c.figs.size - FIG_ROWS.size
-            line(R.id.notif_info_set,
-                if (extra > 0) "+$extra more in the full sheet ▸" else "", "")
-            rv.setViewVisibility(R.id.notif_info_l1, View.GONE)
-            rv.setViewVisibility(R.id.notif_info_l2, View.GONE)
-            rv.setViewVisibility(R.id.notif_info_table, View.GONE)
-            for (i in FIG_ROWS.indices) {
-                val ids = FIG_ROWS[i]
-                val f = c.figs.getOrNull(i)
-                if (f == null) { rv.setViewVisibility(ids.row, View.GONE); continue }
-                rv.setViewVisibility(ids.row, View.VISIBLE)
-                rv.setTextViewText(ids.l, f.getOrNull(0) ?: "")
-                rv.setTextViewText(ids.a, f.getOrNull(1) ?: "")
-                rv.setTextViewText(ids.b, f.getOrNull(2) ?: "")
-            }
-            line(R.id.notif_info_figs_line, "◂ Reference notes", "")
-            fillVisionRow(rv, c)
-            return
+        rv.setViewVisibility(R.id.notif_info_table, View.GONE)
+        // The seller's own words, one per row, opening quote in the first column.
+        for (i in FIG_ROWS.indices) {
+            val ids = FIG_ROWS[i]
+            val q = c.quotes.getOrNull(i)
+            if (q == null || q.isBlank()) { rv.setViewVisibility(ids.row, View.GONE); continue }
+            rv.setViewVisibility(ids.row, View.VISIBLE)
+            rv.setTextViewText(ids.l, "\u201C")
+            rv.setTextColor(ids.l, dim)
+            rv.setTextViewText(ids.a, q)
+            rv.setTextColor(ids.a, sub)
+            rv.setTextViewText(ids.b, "")
         }
-
-        rv.setTextViewText(R.id.notif_info_head, "REFERENCE NOTES")
-        rv.setViewVisibility(R.id.notif_info_set, View.VISIBLE)
-        rv.setTextViewText(R.id.notif_info_set, c.setLine)
-        rv.setTextColor(R.id.notif_info_set, if (c.setUrl.isNotBlank()) blue else ink)
-        line(R.id.notif_info_l1, c.line1, c.line1Kind.ifBlank { "warn" })
-        line(R.id.notif_info_l2, c.line2, c.line2Kind)
-
-        if (c.table.isEmpty()) {
-            rv.setViewVisibility(R.id.notif_info_table, View.GONE)
-        } else {
-            rv.setViewVisibility(R.id.notif_info_table, View.VISIBLE)
-            val twoCols = c.tableHead.size > 1
-            rv.setTextViewText(R.id.notif_info_th1, c.tableHead.getOrNull(0) ?: "")
-            rv.setTextViewText(R.id.notif_info_th2, c.tableHead.getOrNull(1) ?: "")
-            rv.setViewVisibility(R.id.notif_info_th2, if (twoCols) View.VISIBLE else View.GONE)
-            for (i in TABLE_ROWS.indices) {
-                val ids = TABLE_ROWS[i]
-                val row = c.table.getOrNull(i)
-                if (row == null) { rv.setViewVisibility(ids.row, View.GONE); continue }
-                rv.setViewVisibility(ids.row, View.VISIBLE)
-                rv.setTextViewText(ids.l, row.getOrNull(0) ?: "")
-                rv.setTextViewText(ids.a, cellSpannable(row.getOrNull(1) ?: "—"))
-                rv.setTextViewText(ids.b, cellSpannable(row.getOrNull(2) ?: ""))
-                rv.setViewVisibility(ids.b, if (twoCols) View.VISIBLE else View.GONE)
-            }
-        }
-
-        // The fig LIST is page 1 (the block can't scroll); here just the
-        // summary line, which flips the page.
-        line(R.id.notif_info_figs_line,
-            if (c.figsLine.isBlank()) "" else c.figsLine + "  ▸", "ink")
-        for (ids in FIG_ROWS) rv.setViewVisibility(ids.row, View.GONE)
+        rv.setViewVisibility(R.id.notif_info_figs_line, View.VISIBLE)
+        rv.setTextViewText(R.id.notif_info_figs_line, "Full details ▸")
+        rv.setTextColor(R.id.notif_info_figs_line, Color.parseColor("#4A9EFF"))
         fillVisionRow(rv, c)
     }
 
