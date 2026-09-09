@@ -252,7 +252,6 @@ object V4NotificationRenderer {
             collapsed.setInt(R.id.notif_collapsed_top_stripe,
                 "setBackgroundColor", violet)
             collapsed.setViewVisibility(R.id.notif_collapsed_stripe, View.GONE)
-            collapsed.setViewVisibility(R.id.notif_thumb_ring, View.VISIBLE)
             collapsed.setViewVisibility(R.id.notif_grail_tab, View.VISIBLE)
             if (grail.catalogueUrl.isNotBlank()) {
                 val pi = openInAppIntent(ctx, grail.catalogueUrl, "grail:" + p.listingId)
@@ -262,7 +261,6 @@ object V4NotificationRenderer {
         } else {
             expanded.setViewVisibility(R.id.notif_grail_tab, View.GONE)
             collapsed.setViewVisibility(R.id.notif_grail_tab, View.GONE)
-            collapsed.setViewVisibility(R.id.notif_thumb_ring, View.GONE)
         }
 
         // ── In-place modes (2026-09-09): info block / photo size ───────

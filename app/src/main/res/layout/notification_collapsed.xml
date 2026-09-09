@@ -50,52 +50,42 @@
         android:layout_width="0dp"
         android:layout_height="match_parent"
         android:layout_weight="1"
-        android:padding="8dp">
+        android:padding="8dp"
+        android:clipToPadding="false">
 
-    <!-- 2026-09-09: the thumbnail carries the grail mark — a fine violet
-         ring around it and a small round badge with the golden brick on
-         its bottom-right corner (app-badge convention). Nothing touches
-         the text. Both GONE unless the payload carries a grail. -->
-    <FrameLayout
-        android:id="@+id/notif_thumb_wrap"
+    <!-- 2026-09-09 (Mat): a little square block hanging from the far right
+         of the violet top stripe — the expanded tab in miniature. The
+         negative top margin puts it flush under the stripe; clipToPadding
+         off on the row is what stops it being cut. GONE unless grail. -->
+    <ImageView
+        android:id="@+id/notif_grail_tab"
+        android:layout_width="14dp"
+        android:layout_height="14dp"
+        android:layout_alignParentTop="true"
+        android:layout_alignParentEnd="true"
+        android:layout_marginTop="-8dp"
+        android:layout_marginEnd="6dp"
+        android:padding="3dp"
+        android:background="@drawable/bg_grail_tab"
+        android:src="@drawable/ic_grail_brick"
+        android:visibility="gone"
+        android:contentDescription="Grail" />
+
+    <ImageView
+        android:id="@+id/notif_thumb"
         android:layout_width="48dp"
         android:layout_height="48dp"
         android:layout_alignParentStart="true"
-        android:layout_centerVertical="true">
-
-        <ImageView
-            android:id="@+id/notif_thumb"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:scaleType="centerCrop"
-            android:contentDescription="@null" />
-
-        <ImageView
-            android:id="@+id/notif_thumb_ring"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:src="@drawable/bg_grail_ring"
-            android:visibility="gone"
-            android:contentDescription="@null" />
-
-        <ImageView
-            android:id="@+id/notif_grail_tab"
-            android:layout_width="18dp"
-            android:layout_height="18dp"
-            android:layout_gravity="bottom|end"
-            android:padding="4dp"
-            android:background="@drawable/bg_grail_circle"
-            android:src="@drawable/ic_grail_brick"
-            android:visibility="gone"
-            android:contentDescription="Grail" />
-    </FrameLayout>
+        android:layout_centerVertical="true"
+        android:scaleType="centerCrop"
+        android:contentDescription="@null" />
 
     <!-- Brand wordmark + " • <green pct>" — replaces the single title text -->
     <LinearLayout
         android:id="@+id/notif_title_row"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_toEndOf="@id/notif_thumb_wrap"
+        android:layout_toEndOf="@id/notif_thumb"
         android:layout_marginStart="10dp"
         android:orientation="horizontal"
         android:gravity="center_vertical">
@@ -148,7 +138,7 @@
         android:id="@+id/notif_subtitle"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_toEndOf="@id/notif_thumb_wrap"
+        android:layout_toEndOf="@id/notif_thumb"
         android:layout_below="@id/notif_title_row"
         android:layout_marginStart="10dp"
         android:textSize="12sp"
