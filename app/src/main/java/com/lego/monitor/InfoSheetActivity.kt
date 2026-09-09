@@ -61,6 +61,10 @@ class InfoSheetActivity : AppCompatActivity() {
     private var listingUrl = ""
     private var monitorUrl = ""
     private var grail: JSONObject? = null
+    // "vision": the bottom sheet opened from the in-card info block —
+    // header + the Vision section only (2026-09-09, Mat: "the vision
+    // should open up from the bottom in a separate window").
+    private var visionOnly = false
 
     private lateinit var sections: LinearLayout
     private lateinit var statusLine: TextView
@@ -92,6 +96,7 @@ class InfoSheetActivity : AppCompatActivity() {
         monitorUrl  = intent.getStringExtra(EXTRA_MONITOR_URL).orEmpty()
         grail = intent.getStringExtra(EXTRA_GRAIL_JSON)?.takeIf { it.isNotBlank() }
             ?.let { try { JSONObject(it) } catch (_: Exception) { null } }
+        visionOnly = intent.getStringExtra(EXTRA_MODE) == MODE_VISION
 
         setContentView(buildShell())
         if (listingId.isBlank() || apiBase.isBlank()) {
@@ -158,8 +163,9 @@ class InfoSheetActivity : AppCompatActivity() {
             panel.addView(line, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(12) })
         }
 
-        // Action row (duotone icons ported from the dashboard sheet)
-        panel.addView(buildActionRow(), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(14) })
+        // Action row (duotone icons ported from the dashboard sheet) — not
+        // on the vision sheet, which is a single-purpose window.
+        if (!visionOnly) panel.addView(buildActionRow(), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(14) })
 
         statusLine = text("Loading…", 13f, cSub).apply { setPadding(0, dp(12), 0, 0) }
         panel.addView(statusLine)
@@ -168,7 +174,7 @@ class InfoSheetActivity : AppCompatActivity() {
         panel.addView(sections)
 
         // Open in Monitor — for the rare time the full dashboard is wanted.
-        if (monitorUrl.isNotBlank()) panel.addView(text("Open in Monitor ↗", 13f, cBlue).apply {
+        if (monitorUrl.isNotBlank() && !visionOnly) panel.addView(text("Open in Monitor ↗", 13f, cBlue).apply {
             setPadding(0, dp(14), 0, dp(4))
             setOnClickListener { openInMonitor(monitorUrl) }
         })
@@ -226,6 +232,10 @@ class InfoSheetActivity : AppCompatActivity() {
 
     private fun render(d: JSONObject) {
         sections.removeAllViews()
+        if (visionOnly) {
+            sections.addView(section("Vision", visionBody(d)))
+            return
+        }
         sections.addView(section("Reference notes", refsBody(d)))
         sections.addView(section("Vision", visionBody(d)))
         sections.addView(section("Seller's description", descBody(d)))
@@ -559,6 +569,8 @@ class InfoSheetActivity : AppCompatActivity() {
         const val EXTRA_MONITOR_URL = "monitor_url"
         const val EXTRA_PHOTO_URL = "photo_url"
         const val EXTRA_GRAIL_JSON = "grail_json"
+        const val EXTRA_MODE = "mode"
+        const val MODE_VISION = "vision"
     }
 }
 

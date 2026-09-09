@@ -46,8 +46,22 @@ object V4NotificationRenderer {
     private const val RED_ALERT_BG = "#8B0000"
     private val imageThread = Executors.newSingleThreadExecutor()
 
-    fun show(ctx: Context, frame: org.json.JSONObject, payload: V4Payload) {
-        Log.d(TAG, "V4 show: brand=${payload.brand} kind=${payload.kind} pct=${payload.pct} setName='${payload.setName}'")
+    /** In-place card modes (2026-09-09): a tap on the photo or the info
+     *  face re-posts the SAME notification with the card redrawn, so the
+     *  shade never closes. Fired through CardActionReceiver. */
+    data class CardMode(val photoBig: Boolean = false, val infoOpen: Boolean = false)
+
+    // Decoded thumbnails by URL so an in-place redraw is instant (no
+    // placeholder flash). Tiny LRU: a handful of live cards at most.
+    private val bitmapCache = object : LinkedHashMap<String, android.graphics.Bitmap>(8, 0.75f, true) {
+        override fun removeEldestEntry(
+            eldest: MutableMap.MutableEntry<String, android.graphics.Bitmap>?
+        ): Boolean = size > 6
+    }
+
+    fun show(ctx: Context, frame: org.json.JSONObject, payload: V4Payload,
+             mode: CardMode = CardMode()) {
+        Log.d(TAG, "V4 show: brand=${payload.brand} kind=${payload.kind} pct=${payload.pct} setName='${payload.setName}' mode=$mode")
         try {
             ensureChannel(ctx)
             val msgId  = frame.optString("id")
@@ -72,11 +86,12 @@ object V4NotificationRenderer {
             // public,max-age=86400), it lands almost instantly. Image
             // download happens off-thread; once it finishes we re-post the
             // same notifId with the bitmap filled in.
-            Log.d(TAG, "V4 posting initial (no bitmap yet) notifId=$notifId")
-            post(ctx, notifId, payload, bmp = null)
-            Log.d(TAG, "V4 initial post ok")
+            val frameJson = frame.toString()
+            val cached = synchronized(bitmapCache) { bitmapCache[payload.imageUrl] }
+            Log.d(TAG, "V4 posting notifId=$notifId cachedBitmap=${cached != null}")
+            post(ctx, notifId, payload, cached, frameJson, mode)
 
-            if (payload.imageUrl.isNotBlank()) {
+            if (cached == null && payload.imageUrl.isNotBlank()) {
                 imageThread.execute {
                     try {
                         Log.d(TAG, "V4 fetching image: ${payload.imageUrl}")
@@ -87,7 +102,8 @@ object V4NotificationRenderer {
                             val bmp = BitmapFactory.decodeStream(stream)
                             if (bmp != null) {
                                 Log.d(TAG, "V4 image decoded ${bmp.width}x${bmp.height}, re-posting")
-                                post(ctx, notifId, payload, bmp)
+                                synchronized(bitmapCache) { bitmapCache[payload.imageUrl] = bmp }
+                                post(ctx, notifId, payload, bmp, frameJson, mode)
                             } else {
                                 Log.w(TAG, "V4 image decode returned null")
                             }
@@ -104,7 +120,8 @@ object V4NotificationRenderer {
 
     private fun post(
         ctx: Context, notifId: Int, p: V4Payload,
-        bmp: android.graphics.Bitmap?
+        bmp: android.graphics.Bitmap?,
+        frameJson: String = "", mode: CardMode = CardMode()
     ) {
         val collapsed = RemoteViews(ctx.packageName, R.layout.notification_collapsed)
         val expanded  = RemoteViews(ctx.packageName, R.layout.notification_expanded)
@@ -242,21 +259,53 @@ object V4NotificationRenderer {
             collapsed.setViewVisibility(R.id.notif_grail_tab, View.GONE)
         }
 
-        // ── Info face on the photo's top-right corner (2026-09-08) ──────
-        // The dashboard card's ⓘ face, same four expressions and colours,
-        // decided server-side (`face`). Tap → the native info sheet.
-        if (p.listingId.isNotBlank() && p.apiBase.isNotBlank()) {
-            expanded.setViewVisibility(R.id.notif_face_btn, View.VISIBLE)
-            expanded.setImageViewResource(R.id.notif_face_btn, faceDrawable(p.face))
-            expanded.setInt(R.id.notif_face_btn, "setColorFilter", faceColor(p.face))
-            expanded.setOnClickPendingIntent(R.id.notif_face_btn, infoSheetIntent(ctx, p))
+        // ── In-place modes (2026-09-09): info block / photo size ───────
+        // The info face (dashboard card's ⓘ, same expressions + colours,
+        // decided server-side) sits top-right of the photo. Tap → the card
+        // redraws with the INFO BLOCK in place of the photo, laid out like
+        // the app's sheet; the face on the block closes it. Tap the photo
+        // → the card redraws with the photo taller; tap again to shrink.
+        // Both are broadcasts, so the shade stays open. The vision row in
+        // the block opens the vision bottom sheet (a real screen).
+        val card = p.infoCard
+        val hasIds = p.listingId.isNotBlank() && p.apiBase.isNotBlank()
+        if (mode.infoOpen && card != null) {
+            expanded.setViewVisibility(R.id.notif_thumb_wrap, View.GONE)
+            expanded.setViewVisibility(R.id.notif_info_block, View.VISIBLE)
+            fillInfoBlock(expanded, card)
+            expanded.setImageViewResource(R.id.notif_info_close, faceDrawable(p.face))
+            expanded.setInt(R.id.notif_info_close, "setColorFilter", faceColor(p.face))
+            expanded.setOnClickPendingIntent(R.id.notif_info_close,
+                redrawIntent(ctx, p, frameJson, mode.copy(infoOpen = false), "info-close"))
+            expanded.setOnClickPendingIntent(R.id.notif_info_vision, visionSheetIntent(ctx, p))
+            if (card.setUrl.isNotBlank()) {
+                expanded.setOnClickPendingIntent(R.id.notif_info_set,
+                    openInAppIntent(ctx, card.setUrl, "set:" + p.listingId))
+            }
         } else {
-            expanded.setViewVisibility(R.id.notif_face_btn, View.GONE)
-        }
-
-        // ── Photo tap → full-screen viewer ──────────────────────────────
-        if (p.photoUrl.isNotBlank()) {
-            expanded.setOnClickPendingIntent(R.id.notif_thumb, photoIntent(ctx, p))
+            expanded.setViewVisibility(R.id.notif_info_block, View.GONE)
+            expanded.setViewVisibility(R.id.notif_thumb_wrap, View.VISIBLE)
+            expanded.setViewVisibility(R.id.notif_thumb,
+                if (mode.photoBig) View.GONE else View.VISIBLE)
+            expanded.setViewVisibility(R.id.notif_thumb_big,
+                if (mode.photoBig) View.VISIBLE else View.GONE)
+            if (p.imageUrl.isNotBlank() && frameJson.isNotBlank()) {
+                val flip = redrawIntent(ctx, p, frameJson,
+                    mode.copy(photoBig = !mode.photoBig), "photo")
+                expanded.setOnClickPendingIntent(R.id.notif_thumb, flip)
+                expanded.setOnClickPendingIntent(R.id.notif_thumb_big, flip)
+            }
+            if (hasIds) {
+                expanded.setViewVisibility(R.id.notif_face_btn, View.VISIBLE)
+                expanded.setImageViewResource(R.id.notif_face_btn, faceDrawable(p.face))
+                expanded.setInt(R.id.notif_face_btn, "setColorFilter", faceColor(p.face))
+                expanded.setOnClickPendingIntent(R.id.notif_face_btn,
+                    if (card != null && frameJson.isNotBlank())
+                        redrawIntent(ctx, p, frameJson, mode.copy(infoOpen = true), "info-open")
+                    else infoSheetIntent(ctx, p))
+            } else {
+                expanded.setViewVisibility(R.id.notif_face_btn, View.GONE)
+            }
         }
 
         // Apply runtime-tunable sizes (from V4Style) to every text view
@@ -312,6 +361,7 @@ object V4NotificationRenderer {
         if (bmp != null) {
             collapsed.setImageViewBitmap(R.id.notif_thumb, bmp)
             expanded.setImageViewBitmap(R.id.notif_thumb, bmp)
+            expanded.setImageViewBitmap(R.id.notif_thumb_big, bmp)
         } else {
             // Placeholder while the image is downloading. Plain dark
             // square keeps the layout from jumping when the bitmap
@@ -319,6 +369,8 @@ object V4NotificationRenderer {
             collapsed.setInt(R.id.notif_thumb,
                 "setBackgroundColor", Color.parseColor("#222222"))
             expanded.setInt(R.id.notif_thumb,
+                "setBackgroundColor", Color.parseColor("#222222"))
+            expanded.setInt(R.id.notif_thumb_big,
                 "setBackgroundColor", Color.parseColor("#222222"))
         }
 
@@ -726,6 +778,122 @@ object V4NotificationRenderer {
         return PendingIntent.getActivity(
             ctx, ("info:" + p.listingId).hashCode(), i,
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+    }
+
+    /** Broadcast that re-posts this card in a new mode (in place). */
+    private fun redrawIntent(ctx: Context, p: V4Payload, frameJson: String,
+                             mode: CardMode, what: String): PendingIntent {
+        val i = Intent(ctx, CardActionReceiver::class.java).apply {
+            action = CardActionReceiver.ACTION_REDRAW
+            putExtra(CardActionReceiver.EXTRA_FRAME, frameJson)
+            putExtra(CardActionReceiver.EXTRA_PHOTO_BIG, mode.photoBig)
+            putExtra(CardActionReceiver.EXTRA_INFO_OPEN, mode.infoOpen)
+        }
+        return PendingIntent.getBroadcast(
+            ctx, ("redraw:$what:" + p.listingId).hashCode(), i,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+    }
+
+    /** The vision bottom sheet — InfoSheetActivity in vision-only mode. */
+    private fun visionSheetIntent(ctx: Context, p: V4Payload): PendingIntent {
+        val i = Intent(ctx, InfoSheetActivity::class.java).apply {
+            putExtra(InfoSheetActivity.EXTRA_MODE, InfoSheetActivity.MODE_VISION)
+            putExtra(InfoSheetActivity.EXTRA_LISTING_ID, p.listingId)
+            putExtra(InfoSheetActivity.EXTRA_API_BASE, p.apiBase)
+            putExtra(InfoSheetActivity.EXTRA_TITLE, p.sellerTitle.ifBlank { p.setName })
+            putExtra(InfoSheetActivity.EXTRA_BRAND, brandLabel(p.brand))
+            putExtra(InfoSheetActivity.EXTRA_ASKING, p.asking)
+            putExtra(InfoSheetActivity.EXTRA_TRUE_COST, p.trueCost)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        return PendingIntent.getActivity(
+            ctx, ("vision:" + p.listingId).hashCode(), i,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+    }
+
+    private data class RowIds(val row: Int, val l: Int, val a: Int, val b: Int)
+    private val TABLE_ROWS = listOf(
+        RowIds(R.id.notif_info_r0, R.id.notif_info_r0_l, R.id.notif_info_r0_a, R.id.notif_info_r0_b),
+        RowIds(R.id.notif_info_r1, R.id.notif_info_r1_l, R.id.notif_info_r1_a, R.id.notif_info_r1_b),
+        RowIds(R.id.notif_info_r2, R.id.notif_info_r2_l, R.id.notif_info_r2_a, R.id.notif_info_r2_b),
+        RowIds(R.id.notif_info_r3, R.id.notif_info_r3_l, R.id.notif_info_r3_a, R.id.notif_info_r3_b),
+    )
+    private val FIG_ROWS = listOf(
+        RowIds(R.id.notif_info_f0, R.id.notif_info_f0_num, R.id.notif_info_f0_name, R.id.notif_info_f0_val),
+        RowIds(R.id.notif_info_f1, R.id.notif_info_f1_num, R.id.notif_info_f1_name, R.id.notif_info_f1_val),
+        RowIds(R.id.notif_info_f2, R.id.notif_info_f2_num, R.id.notif_info_f2_name, R.id.notif_info_f2_val),
+        RowIds(R.id.notif_info_f3, R.id.notif_info_f3_num, R.id.notif_info_f3_name, R.id.notif_info_f3_val),
+        RowIds(R.id.notif_info_f4, R.id.notif_info_f4_num, R.id.notif_info_f4_name, R.id.notif_info_f4_val),
+    )
+
+    /** Fill the in-card info block from the Pi's pre-rendered strings. */
+    private fun fillInfoBlock(rv: RemoteViews, c: InfoCard) {
+        val blue = Color.parseColor("#4A9EFF"); val warn = Color.parseColor("#F2B35A")
+        val ok = Color.parseColor("#4CC38A"); val sub = Color.parseColor("#9AA0A6")
+        val ink = Color.parseColor("#F2F2F2")
+        fun line(id: Int, text: String, kind: String) {
+            if (text.isBlank()) { rv.setViewVisibility(id, View.GONE); return }
+            rv.setViewVisibility(id, View.VISIBLE)
+            rv.setTextViewText(id, text)
+            rv.setTextColor(id, when (kind) { "warn" -> warn; "ok" -> ok; "ink" -> ink; else -> sub })
+        }
+        rv.setTextViewText(R.id.notif_info_set, c.setLine)
+        rv.setTextColor(R.id.notif_info_set, if (c.setUrl.isNotBlank()) blue else ink)
+        line(R.id.notif_info_l1, c.line1, c.line1Kind.ifBlank { "warn" })
+        line(R.id.notif_info_l2, c.line2, c.line2Kind)
+
+        if (c.table.isEmpty()) {
+            rv.setViewVisibility(R.id.notif_info_table, View.GONE)
+        } else {
+            rv.setViewVisibility(R.id.notif_info_table, View.VISIBLE)
+            val twoCols = c.tableHead.size > 1
+            rv.setTextViewText(R.id.notif_info_th1, c.tableHead.getOrNull(0) ?: "")
+            rv.setTextViewText(R.id.notif_info_th2, c.tableHead.getOrNull(1) ?: "")
+            rv.setViewVisibility(R.id.notif_info_th2, if (twoCols) View.VISIBLE else View.GONE)
+            for (i in TABLE_ROWS.indices) {
+                val ids = TABLE_ROWS[i]
+                val row = c.table.getOrNull(i)
+                if (row == null) { rv.setViewVisibility(ids.row, View.GONE); continue }
+                rv.setViewVisibility(ids.row, View.VISIBLE)
+                rv.setTextViewText(ids.l, row.getOrNull(0) ?: "")
+                rv.setTextViewText(ids.a, cellSpannable(row.getOrNull(1) ?: "—"))
+                rv.setTextViewText(ids.b, cellSpannable(row.getOrNull(2) ?: ""))
+                rv.setViewVisibility(ids.b, if (twoCols) View.VISIBLE else View.GONE)
+            }
+        }
+
+        line(R.id.notif_info_figs_line, c.figsLine, "ink")
+        for (i in FIG_ROWS.indices) {
+            val ids = FIG_ROWS[i]
+            val f = c.figs.getOrNull(i)
+            if (f == null) { rv.setViewVisibility(ids.row, View.GONE); continue }
+            rv.setViewVisibility(ids.row, View.VISIBLE)
+            rv.setTextViewText(ids.l, f.getOrNull(0) ?: "")
+            rv.setTextViewText(ids.a, f.getOrNull(1) ?: "")
+            rv.setTextViewText(ids.b, f.getOrNull(2) ?: "")
+        }
+
+        rv.setTextViewText(R.id.notif_info_vision_txt, c.visionLine.ifBlank { "Run vision" })
+        val vc = when (c.visionKind) {
+            "good" -> ok
+            "vis"  -> Color.parseColor("#F0A12A")
+            else   -> Color.parseColor("#E0A63A")
+        }
+        rv.setTextColor(R.id.notif_info_vision_txt, vc)
+        rv.setInt(R.id.notif_info_vision_icon, "setColorFilter", vc)
+    }
+
+    /** "£152 +74%" → value bold white, pct green (or red when negative). */
+    private fun cellSpannable(s: String): CharSequence {
+        val sp = s.indexOf(' ')
+        if (sp < 0) return s
+        val sb = SpannableStringBuilder(s)
+        sb.setSpan(StyleSpan(android.graphics.Typeface.BOLD), 0, sp,
+            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        val neg = s.length > sp + 1 && s[sp + 1] == '-'
+        sb.setSpan(ForegroundColorSpan(Color.parseColor(if (neg) "#E06060" else "#4CC38A")),
+            sp + 1, s.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        return sb
     }
 
     private fun photoIntent(ctx: Context, p: V4Payload): PendingIntent {

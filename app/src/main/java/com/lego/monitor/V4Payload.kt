@@ -93,6 +93,9 @@ data class V4Payload(
     // 🎯 Grail block — present only when the matched set/fig is on Mat's
     // want list at a real discount. Drives the violet banner + tab.
     val grail: GrailInfo? = null,
+    // In-card info block (2026-09-09): the sheet's facts, pre-rendered by
+    // the Pi so the card can redraw in place with no network at tap time.
+    val infoCard: InfoCard? = null,
 ) {
     val isAuction: Boolean get() = kind == "auction"
 
@@ -140,6 +143,7 @@ data class V4Payload(
                     face         = o.optString("face", ""),
                     photoUrl     = o.optString("photo_url", ""),
                     grail        = GrailInfo.parse(o.optJSONObject("grail")),
+                    infoCard     = InfoCard.parse(o.optJSONObject("info_card")),
                 )
             } catch (_: Exception) {
                 null
@@ -176,6 +180,53 @@ data class GrailInfo(
                 pctUnder     = o.optInt("pct_under", 0),
                 catalogueUrl = o.optString("catalogue_url", ""),
                 raw          = o.toString(),
+            )
+        }
+    }
+}
+
+/**
+ * In-card info block (2026-09-09) — the dashboard ⓘ sheet's facts as
+ * ready-to-draw strings. `table` rows are [label, complete, asListed]
+ * with cells like "£152 +74%"; `figs` rows are [num, name, used].
+ * Kinds ("warn" | "ok" | "" ) pick the line colour.
+ */
+data class InfoCard(
+    val setLine: String,
+    val setUrl: String,
+    val line1: String,
+    val line1Kind: String,
+    val line2: String,
+    val line2Kind: String,
+    val tableHead: List<String>,
+    val table: List<List<String>>,
+    val figsLine: String,
+    val figs: List<List<String>>,
+    val visionLine: String,
+    val visionKind: String,
+) {
+    companion object {
+        private fun strings(a: org.json.JSONArray?): List<String> =
+            if (a == null) emptyList() else (0 until a.length()).map { a.optString(it, "") }
+        private fun rows(a: org.json.JSONArray?): List<List<String>> =
+            if (a == null) emptyList() else (0 until a.length()).map { strings(a.optJSONArray(it)) }
+        fun parse(o: org.json.JSONObject?): InfoCard? {
+            if (o == null) return null
+            val setLine = o.optString("set_line", "")
+            if (setLine.isBlank()) return null
+            return InfoCard(
+                setLine    = setLine,
+                setUrl     = o.optString("set_url", ""),
+                line1      = o.optString("line1", ""),
+                line1Kind  = o.optString("line1_kind", ""),
+                line2      = o.optString("line2", ""),
+                line2Kind  = o.optString("line2_kind", ""),
+                tableHead  = strings(o.optJSONArray("table_head")),
+                table      = rows(o.optJSONArray("table")),
+                figsLine   = o.optString("figs_line", ""),
+                figs       = rows(o.optJSONArray("figs")),
+                visionLine = o.optString("vision_line", ""),
+                visionKind = o.optString("vision_kind", ""),
             )
         }
     }

@@ -57,6 +57,11 @@
             android:excludeFromRecents="true"
             android:theme="@style/Theme.LegoMonitor.Viewer" />
 
+        <!-- 2026-09-09: in-place card redraws (photo size / info block). -->
+        <receiver
+            android:name=".CardActionReceiver"
+            android:exported="false" />
+
         <service
             android:name=".WebSocketService"
             android:exported="false"
