@@ -1,49 +1,58 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Grail mark: the AURUM BRICK (Mat's pick, 2026-09-09). A solid gold 2x2
-     with the top face catching the light and a warm halo behind it. Drawn
-     in colour with gradients — do NOT tint this drawable. -->
+<!-- Grail mark: the HOLOCRON (Mat's pick, 2026-09-09). A gold isometric cube
+     with a light burning inside and a warm halo behind it. Drawn in colour
+     with gradients — do NOT tint this drawable. (File keeps its old name so
+     every layout reference stays valid.) -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:aapt="http://schemas.android.com/aapt"
     android:width="24dp" android:height="24dp"
     android:viewportWidth="24" android:viewportHeight="24">
 
     <!-- warm halo -->
-    <path android:pathData="M12,13 m-11,0 a11,11 0 1,0 22,0 a11,11 0 1,0 -22,0z">
+    <path android:pathData="M12,12 m-11,0 a11,11 0 1,0 22,0 a11,11 0 1,0 -22,0z">
         <aapt:attr name="android:fillColor">
-            <gradient android:type="radial" android:centerX="12" android:centerY="13" android:gradientRadius="11">
-                <item android:offset="0" android:color="#AEFFE38A"/>
-                <item android:offset="1" android:color="#00FFE38A"/>
+            <gradient android:type="radial" android:centerX="12" android:centerY="12" android:gradientRadius="11">
+                <item android:offset="0" android:color="#BFFFE9A3"/>
+                <item android:offset="0.45" android:color="#73FFB020"/>
+                <item android:offset="1" android:color="#00FFB020"/>
             </gradient>
         </aapt:attr>
     </path>
 
-    <!-- brick body, brushed gold -->
-    <path android:pathData="M4,11h16v8a1.2,1.2 0 0,1 -1.2,1.2H5.2A1.2,1.2 0 0,1 4,19v-8z">
+    <!-- left face (in shadow) -->
+    <path android:pathData="M12,3l7.5,4.3v8.4L12,20l-7.5,-4.3V7.3z">
         <aapt:attr name="android:fillColor">
-            <gradient android:type="linear" android:startX="4" android:startY="11" android:endX="20" android:endY="20.2">
-                <item android:offset="0" android:color="#FFFFF1B0"/>
-                <item android:offset="0.45" android:color="#FFF2C21E"/>
-                <item android:offset="1" android:color="#FFB8780B"/>
+            <gradient android:type="linear" android:startX="4.5" android:startY="3" android:endX="19.5" android:endY="20">
+                <item android:offset="0" android:color="#FFD9A10F"/>
+                <item android:offset="1" android:color="#FF8A5A06"/>
             </gradient>
         </aapt:attr>
     </path>
 
-    <!-- top face catching the light -->
-    <path android:pathData="M4,11h16v2.2H4z" android:fillColor="#8CFFF3C0"/>
-
-    <!-- studs -->
-    <path android:pathData="M7,11V8.8h4V11zM13,11V8.8h4V11z">
+    <!-- top face (lit) -->
+    <path android:pathData="M12,3l7.5,4.3L12,11.6 4.5,7.3z">
         <aapt:attr name="android:fillColor">
-            <gradient android:type="linear" android:startX="7" android:startY="11" android:endX="17" android:endY="8.8">
-                <item android:offset="0" android:color="#FF9A6208"/>
-                <item android:offset="0.5" android:color="#FFF7CF3A"/>
-                <item android:offset="1" android:color="#FFFFF4C4"/>
+            <gradient android:type="linear" android:startX="4.5" android:startY="7" android:endX="19.5" android:endY="7">
+                <item android:offset="0" android:color="#FFFFF4C4"/>
+                <item android:offset="1" android:color="#FFF2C21E"/>
             </gradient>
         </aapt:attr>
     </path>
-    <path android:pathData="M7,8.8h4M13,8.8h4" android:strokeColor="#F2FFF8DC" android:strokeWidth="0.9" android:strokeLineCap="round"/>
 
-    <!-- edge + glint -->
-    <path android:pathData="M4,11h16v8a1.2,1.2 0 0,1 -1.2,1.2H5.2A1.2,1.2 0 0,1 4,19v-8z" android:strokeColor="#997A4E05" android:strokeWidth="0.8"/>
-    <path android:pathData="M5.6,12.8l1.8,-0.2" android:strokeColor="#E6FFFFFF" android:strokeWidth="1" android:strokeLineCap="round"/>
+    <!-- right face -->
+    <path android:pathData="M12,11.6l7.5,-4.3v8.4L12,20z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear" android:startX="12" android:startY="7.3" android:endX="19.5" android:endY="20">
+                <item android:offset="0" android:color="#FFF5C93A"/>
+                <item android:offset="1" android:color="#FFB07708"/>
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- edges -->
+    <path android:pathData="M12,3l7.5,4.3v8.4L12,20l-7.5,-4.3V7.3zM12,11.6v8.4M4.5,7.3L12,11.6l7.5,-4.3"
+        android:strokeColor="#D9FFF3C4" android:strokeWidth="0.55"/>
+
+    <!-- the light inside -->
+    <path android:pathData="M12,8.2l2.6,1.5v3L12,14.2l-2.6,-1.5v-3z" android:fillColor="#F2FFF7DA"/>
 </vector>
