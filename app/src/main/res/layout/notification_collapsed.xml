@@ -113,6 +113,28 @@
             android:src="@drawable/ic_notification_head"
             android:visibility="gone"
             android:contentDescription="@null" />
+
+        <!-- 2026-09-09: grail mark in the collapsed row — a small violet
+             pill INLINE after the head (a hanging tab got clipped by the
+             row padding and covered the head). -->
+        <LinearLayout
+            android:id="@+id/notif_grail_tab"
+            android:layout_width="wrap_content"
+            android:layout_height="15dp"
+            android:layout_marginStart="7dp"
+            android:layout_gravity="center_vertical"
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:paddingStart="4dp"
+            android:paddingEnd="4dp"
+            android:background="@drawable/bg_grail_pill"
+            android:visibility="gone">
+            <ImageView
+                android:layout_width="10dp"
+                android:layout_height="10dp"
+                android:src="@drawable/ic_grail_brick"
+                android:contentDescription="@null" />
+        </LinearLayout>
     </LinearLayout>
 
     <TextView
@@ -125,32 +147,6 @@
         android:textSize="12sp"
         android:singleLine="true"
         android:ellipsize="end" />
-
-    <!-- 2026-09-08: grail tab hanging from the (violet) top stripe in the
-         collapsed row too, so a grail is spotted in the list. Negative
-         top margin cancels the RelativeLayout padding so it touches the
-         stripe. Tap → the grail's catalogue page. -->
-    <LinearLayout
-        android:id="@+id/notif_grail_tab"
-        android:layout_width="wrap_content"
-        android:layout_height="16dp"
-        android:layout_alignParentTop="true"
-        android:layout_alignParentEnd="true"
-        android:layout_marginTop="-8dp"
-        android:layout_marginEnd="4dp"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:paddingStart="5dp"
-        android:paddingEnd="5dp"
-        android:background="@drawable/bg_grail_tab"
-        android:visibility="gone">
-
-        <ImageView
-            android:layout_width="11dp"
-            android:layout_height="11dp"
-            android:src="@drawable/ic_grail_brick"
-            android:contentDescription="@null" />
-    </LinearLayout>
 
     </RelativeLayout>
 
