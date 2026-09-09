@@ -54,7 +54,7 @@
         <LinearLayout
             android:id="@+id/notif_grail_tab"
             android:layout_width="wrap_content"
-            android:layout_height="24dp"
+            android:layout_height="26dp"
             android:layout_gravity="top|end"
             android:layout_marginEnd="10dp"
             android:orientation="horizontal"
@@ -66,8 +66,8 @@
             android:visibility="gone">
 
             <ImageView
-                android:layout_width="12dp"
-                android:layout_height="12dp"
+                android:layout_width="15dp"
+                android:layout_height="15dp"
                 android:src="@drawable/ic_grail_brick"
                 android:contentDescription="@null" />
 

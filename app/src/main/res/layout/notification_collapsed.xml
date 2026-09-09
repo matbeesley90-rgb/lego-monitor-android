@@ -59,13 +59,13 @@
          off on the row is what stops it being cut. GONE unless grail. -->
     <ImageView
         android:id="@+id/notif_grail_tab"
-        android:layout_width="14dp"
-        android:layout_height="14dp"
+        android:layout_width="18dp"
+        android:layout_height="18dp"
         android:layout_alignParentTop="true"
         android:layout_alignParentEnd="true"
         android:layout_marginTop="-8dp"
         android:layout_marginEnd="-8dp"
-        android:padding="3dp"
+        android:padding="2dp"
         android:background="@drawable/bg_grail_tab"
         android:src="@drawable/ic_grail_brick"
         android:visibility="gone"

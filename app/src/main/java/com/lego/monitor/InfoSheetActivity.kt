@@ -63,6 +63,12 @@ class InfoSheetActivity : AppCompatActivity() {
             displayZoomControls = false
         }
         webView.setBackgroundColor(Color.parseColor("#0F1117"))
+        // The page's close button (top-left) asks the app to close this
+        // window; the dashboard's own sheet uses the same button to close.
+        webView.addJavascriptInterface(object {
+            @android.webkit.JavascriptInterface
+            fun close() { runOnUiThread { finish() } }
+        }, "LegoApp")
         webView.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                 val u = request.url
