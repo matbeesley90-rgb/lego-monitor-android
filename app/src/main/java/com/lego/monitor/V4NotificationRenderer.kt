@@ -848,7 +848,17 @@ object V4NotificationRenderer {
      *  this page"). */
     private fun visionSheetIntent(ctx: Context, p: V4Payload): PendingIntent {
         val url = "${p.apiBase.trimEnd('/')}/vision?id=${Uri.encode(p.listingId)}"
-        return openInAppIntent(ctx, url, "vision:" + p.listingId)
+        // Its own window (not the main screen) so Back returns to wherever
+        // the notification was tapped from.
+        val i = Intent(ctx, InfoSheetActivity::class.java).apply {
+            putExtra(InfoSheetActivity.EXTRA_URL, url)
+            putExtra(InfoSheetActivity.EXTRA_API_BASE, p.apiBase)
+            putExtra(InfoSheetActivity.EXTRA_LISTING_ID, p.listingId)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        return PendingIntent.getActivity(
+            ctx, ("vision:" + p.listingId).hashCode(), i,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
     }
 
     private data class RowIds(val row: Int, val l: Int, val a: Int, val b: Int)

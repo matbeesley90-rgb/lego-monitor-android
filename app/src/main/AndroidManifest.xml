@@ -48,8 +48,7 @@
             android:name=".InfoSheetActivity"
             android:exported="false"
             android:excludeFromRecents="true"
-            android:launchMode="singleTop"
-            android:theme="@style/Theme.LegoMonitor.Sheet" />
+            android:theme="@style/Theme.LegoMonitor" />
         <!-- Tap on the notification photo. -->
         <activity
             android:name=".PhotoViewerActivity"
