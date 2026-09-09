@@ -252,11 +252,6 @@ object V4NotificationRenderer {
             collapsed.setInt(R.id.notif_collapsed_stripe,
                 "setBackgroundColor", violet)
             collapsed.setViewVisibility(R.id.notif_grail_tab, View.VISIBLE)
-            // The collapsed tab hangs over the title row's right end —
-            // reserve that width so the fig head is never under it
-            // (2026-09-09: it cut the head off).
-            collapsed.setViewPadding(R.id.notif_title_row, 0, 0,
-                (72 * ctx.resources.displayMetrics.density).toInt(), 0)
             if (grail.catalogueUrl.isNotBlank()) {
                 val pi = openInAppIntent(ctx, grail.catalogueUrl, "grail:" + p.listingId)
                 expanded.setOnClickPendingIntent(R.id.notif_grail_tab, pi)
@@ -265,7 +260,6 @@ object V4NotificationRenderer {
         } else {
             expanded.setViewVisibility(R.id.notif_grail_tab, View.GONE)
             collapsed.setViewVisibility(R.id.notif_grail_tab, View.GONE)
-            collapsed.setViewPadding(R.id.notif_title_row, 0, 0, 0, 0)
         }
 
         // ── In-place modes (2026-09-09): info block / photo size ───────
