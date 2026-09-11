@@ -59,6 +59,10 @@ data class V4Payload(
     // Renders the whole notification red and routes it to a separate
     // high-importance channel with its own sound.
     val redAlert: Boolean = false,
+    // Option D (2026-09-11): whole-body colour by profit band (red/green/amber/"")
+    // and the collapsed row's profit text ("🔥 +369%", "+85%", "checking…").
+    val band: String = "",
+    val bundleTail: String = "",
 
     // Bundles only — per-token version of bundleLine so the renderer can
     // colour total (blue), profit (green/red), rest (grey). Null → render
@@ -134,6 +138,8 @@ data class V4Payload(
                     bundleLine   = o.optString("bundle_line", ""),
                     iconColor    = o.optString("icon_color", ""),
                     redAlert     = o.optBoolean("red_alert", false),
+                    band         = o.optString("band", ""),
+                    bundleTail   = o.optString("bundle_tail", ""),
                     bundleParts  = BundleParts.parse(o.optJSONObject("bundle_parts")),
                     replaceKey   = o.optString("replace_key", ""),
                     isUpdate     = o.optBoolean("update", false),

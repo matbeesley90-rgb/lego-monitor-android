@@ -415,14 +415,22 @@ object V4NotificationRenderer {
             // value band colour — because a bundle's contents (sets or
             // figs) and their value are unknown. Both tinted the same
             // muted grey so they read as one "bundle" unit.
-            val greyMarker = Color.parseColor("#8A8A95")
+            // Option D (Mat, 2026-09-11): bricks retired. The row now
+            // carries the profit text; the head stays last, tinted to the
+            // top fig's value band when there is one.
             for (rv in listOf(collapsed, expanded)) {
-                rv.setViewVisibility(R.id.notif_bundle_bricks, View.VISIBLE)
-                rv.setInt(R.id.notif_bundle_bricks, "setColorFilter", greyMarker)
-                // Title-row head hidden for bundles now — the value-tinted
-                // head lives on the footer fig line (Mat, 2026-07-23), so a
-                // second grey head here would just be noise.
-                rv.setViewVisibility(R.id.notif_fig_head, View.GONE)
+                rv.setViewVisibility(R.id.notif_bundle_bricks, View.GONE)
+                if (p.iconColor.isNotBlank()) {
+                    try {
+                        rv.setViewVisibility(R.id.notif_fig_head, View.VISIBLE)
+                        rv.setInt(R.id.notif_fig_head, "setColorFilter",
+                                  Color.parseColor(p.iconColor))
+                    } catch (_: Exception) {
+                        rv.setViewVisibility(R.id.notif_fig_head, View.GONE)
+                    }
+                } else {
+                    rv.setViewVisibility(R.id.notif_fig_head, View.GONE)
+                }
             }
         } else if (p.iconColor.isNotBlank()) {
             try {
@@ -470,6 +478,14 @@ object V4NotificationRenderer {
                              "setBackgroundColor", redBg)
             expanded.setInt(R.id.notif_root_expanded,
                             "setBackgroundColor", redBg)
+        } else {
+            // Option D: whole body by profit band (bundles only — the
+            // server sends band="" for everything else).
+            val bg = bandBodyColor(p)
+            if (bg != null) {
+                collapsed.setInt(R.id.notif_root_collapsed, "setBackgroundColor", bg)
+                expanded.setInt(R.id.notif_root_expanded, "setBackgroundColor", bg)
+            }
         }
 
         val builder = NotificationCompat.Builder(
@@ -512,6 +528,25 @@ object V4NotificationRenderer {
             .notify(notifId, builder.build())
     }
 
+    /** Row text colour for the bundle profit, by band. On the red body the
+     * text goes white; green/amber use the band's own colour; no band =
+     * muted grey, and the pre-vision "checking…" is dimmer still. */
+    private fun bandTextColor(p: V4Payload): Int = when (p.band) {
+        "red"   -> Color.WHITE
+        "green" -> Color.parseColor("#4CC38A")
+        "amber" -> Color.parseColor("#E8C23A")
+        else    -> if (p.bundleTail.startsWith("checking")) Color.parseColor("#6A6F75")
+                   else Color.parseColor("#8F949A")
+    }
+
+    /** Body colour for the band — the whole card below the app header. */
+    private fun bandBodyColor(p: V4Payload): Int? = when (p.band) {
+        "red"   -> Color.parseColor(RED_ALERT_BG)
+        "green" -> Color.parseColor("#0F3D27")
+        "amber" -> Color.parseColor("#4A3606")
+        else    -> null
+    }
+
     /** The text AFTER the brand wordmark — " • 56%" or
      * " • 31% • 🔨 17m". The brand wordmark itself is set as an
      * ImageView (brandDrawableFor) so it uses the actual SVG logo.
@@ -537,7 +572,25 @@ object V4NotificationRenderer {
         // text with a trailing "•" so it reads "[brand] • £19 •" and the
         // bricks+head pair sit right after it as one "bundle" unit.
         if (p.kind == "bundle") {
-            sb.append(" •")
+            // Option D (Mat, 2026-09-11): the profit replaces the bricks —
+            // "• £108 • 🔥 +369%" coloured by band, then the auction
+            // countdown, then the head (last, as always).
+            if (p.bundleTail.isNotBlank()) {
+                sb.append(" • ")
+                val ts = sb.length
+                sb.append(p.bundleTail)
+                sb.setSpan(ForegroundColorSpan(bandTextColor(p)),
+                    ts, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            }
+            val ml = p.minsLeft
+            if (ml != null && ml > 0) {
+                sb.append(" • ")
+                val ts = sb.length
+                sb.append("\uD83D\uDD28 ${ml}m")
+                sb.setSpan(ForegroundColorSpan(Color.parseColor("#F5AF02")),
+                    ts, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            }
+            if (p.iconColor.isNotBlank()) sb.append(" •")
             return sb
         }
         sb.append(" • ")
