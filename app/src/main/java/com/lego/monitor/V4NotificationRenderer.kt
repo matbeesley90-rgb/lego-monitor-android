@@ -556,6 +556,19 @@ object V4NotificationRenderer {
         val s = p.style
         val sb = SpannableStringBuilder()
         sb.append("• ")
+        // AUCTION: the countdown leads the row, before the price (Mat,
+        // 2026-09-11: "we still don't know it is an auction because it
+        // cuts it off" — last on the row it was the first thing ellipsised).
+        val mlFirst = p.minsLeft
+        if (mlFirst != null && mlFirst > 0) {
+            val ts = sb.length
+            sb.append("\uD83D\uDD28 ${mlFirst}m")
+            sb.setSpan(ForegroundColorSpan(Color.parseColor("#F5AF02")),
+                ts, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            sb.setSpan(StyleSpan(android.graphics.Typeface.BOLD),
+                ts, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            sb.append(" • ")
+        }
         // Asking price on the title line — the number that decides whether a
         // deal is worth opening. Kept here (not just in the price grid below)
         // so it survives the collapsed / stacked tray view, where the grid is
@@ -582,14 +595,6 @@ object V4NotificationRenderer {
                 sb.setSpan(ForegroundColorSpan(bandTextColor(p)),
                     ts, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
             }
-            val ml = p.minsLeft
-            if (ml != null && ml > 0) {
-                sb.append(" • ")
-                val ts = sb.length
-                sb.append("\uD83D\uDD28 ${ml}m")
-                sb.setSpan(ForegroundColorSpan(Color.parseColor("#F5AF02")),
-                    ts, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-            }
             if (p.iconColor.isNotBlank()) sb.append(" •")
             return sb
         }
@@ -603,18 +608,8 @@ object V4NotificationRenderer {
             pctStart, pctEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
         sb.setSpan(ForegroundColorSpan(s.titlePctColor),
             pctStart, pctEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-        if (p.isAuction && p.minsLeft != null) {
-            // Hammer emoji intentionally removed — the brand wordmark
-            // already conveys "this is from eBay auctions" and the
-            // timer reads cleanly without the icon.
-            val timerStart = sb.length
-            sb.append(" • ${p.minsLeft}m")
-            if (s.titleTimerScale != 1.0f) {
-                sb.setSpan(RelativeSizeSpan(s.titleTimerScale),
-                    timerStart, sb.length,
-                    Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-            }
-        }
+        // (Auction countdown now leads the row — see the top of this
+        // function — so nothing is appended here.)
         // Mat's spec: the head is the last element on the row, preceded
         // by the same plain "•" separator as everything else —
         // "ebay • 70% • [head]" / "ebay • 70% • 5m • [head]". Only
