@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Info face, wide eyes = vision has run (#ic-face-look). White artwork; tint at runtime with setColorFilter / app:tint. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <path android:pathData="M8.6 4.4h6.8v1.8h.6a2.8 2.8 0 0 1 2.8 2.8v6.6a2.8 2.8 0 0 1-2.8 2.8h-.6v1.8H8.6v-1.8H8a2.8 2.8 0 0 1-2.8-2.8V9a2.8 2.8 0 0 1 2.8-2.8h.6z" android:fillColor="#FFFFFFFF" android:fillAlpha="0.22" />
+    <path android:pathData="M8.6 4.4h6.8v1.8h.6a2.8 2.8 0 0 1 2.8 2.8v6.6a2.8 2.8 0 0 1-2.8 2.8h-.6v1.8H8.6v-1.8H8a2.8 2.8 0 0 1-2.8-2.8V9a2.8 2.8 0 0 1 2.8-2.8h.6z" android:strokeColor="#FFFFFFFF" android:strokeWidth="1.5" android:strokeLineJoin="round" />
+    <path android:pathData="M7.8999999999999995,10.6 a1.7,1.7 0 1,0 3.4,0 a1.7,1.7 0 1,0 -3.4,0z" android:strokeColor="#FFFFFFFF" android:strokeWidth="1.2" />
+    <path android:pathData="M12.700000000000001,10.6 a1.7,1.7 0 1,0 3.4,0 a1.7,1.7 0 1,0 -3.4,0z" android:strokeColor="#FFFFFFFF" android:strokeWidth="1.2" />
+    <path android:pathData="M9.4,10.6 a0.7,0.7 0 1,0 1.4,0 a0.7,0.7 0 1,0 -1.4,0z" android:fillColor="#FFFFFFFF" />
+    <path android:pathData="M14.200000000000001,10.6 a0.7,0.7 0 1,0 1.4,0 a0.7,0.7 0 1,0 -1.4,0z" android:fillColor="#FFFFFFFF" />
+    <path android:pathData="M10 14.6h4" android:strokeColor="#FFFFFFFF" android:strokeWidth="1.4" android:strokeLineCap="round" />
+</vector>

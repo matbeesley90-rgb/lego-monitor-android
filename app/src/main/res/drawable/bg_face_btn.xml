@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Round dark button behind the info face on the notification photo,
+     matching the dashboard card's corner button. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
+    <gradient android:angle="270" android:startColor="#F02A2E3D" android:endColor="#F01A1D27" />
+    <stroke android:width="1dp" android:color="#40FFFFFF" />
+</shape>

@@ -38,25 +38,63 @@ object V4NotificationRenderer {
 
     private const val TAG = "LegoV4"
     private const val CHANNEL_ID = "lego_monitor_alerts"
+    // "Drop everything" deals — own channel so they sound different, not
+    // just look different. See ensureChannel().
+    private const val RED_CHANNEL_ID = "lego_monitor_red"
+    // Deep red: strong against both One UI's warm notification shade and
+    // a dark background, while leaving white body text readable.
+    private const val RED_ALERT_BG = "#8B0000"
     private val imageThread = Executors.newSingleThreadExecutor()
 
-    fun show(ctx: Context, frame: org.json.JSONObject, payload: V4Payload) {
-        Log.d(TAG, "V4 show: brand=${payload.brand} kind=${payload.kind} pct=${payload.pct} setName='${payload.setName}'")
+    /** In-place card modes (2026-09-09): a tap on the photo or the info
+     *  face re-posts the SAME notification with the card redrawn, so the
+     *  shade never closes. Fired through CardActionReceiver. */
+    /** infoPage: 0 = reference notes, 1 = the fig list (the block can't
+     *  scroll, so it pages in place). */
+    data class CardMode(val photoBig: Boolean = false, val infoOpen: Boolean = false,
+                        val infoPage: Int = 0)
+
+    // Decoded thumbnails by URL so an in-place redraw is instant (no
+    // placeholder flash). Tiny LRU: a handful of live cards at most.
+    private val bitmapCache = object : LinkedHashMap<String, android.graphics.Bitmap>(8, 0.75f, true) {
+        override fun removeEldestEntry(
+            eldest: MutableMap.MutableEntry<String, android.graphics.Bitmap>?
+        ): Boolean = size > 6
+    }
+
+    fun show(ctx: Context, frame: org.json.JSONObject, payload: V4Payload,
+             mode: CardMode = CardMode()) {
+        Log.d(TAG, "V4 show: brand=${payload.brand} kind=${payload.kind} pct=${payload.pct} setName='${payload.setName}' mode=$mode")
         try {
             ensureChannel(ctx)
             val msgId  = frame.optString("id")
-            val notifId = msgId.hashCode()
+            // Per-listing replace key (server-sent) wins over the ntfy
+            // message id: every later push for the same listing then
+            // REPLACES the shown card (⚡ → 🧮 → 🔥) instead of stacking.
+            val notifId = if (payload.replaceKey.isNotBlank())
+                ("lm:" + payload.replaceKey).hashCode()
+            else msgId.hashCode()
+
+            // Server retraction — the verified verdict says the earlier
+            // flash card was junk: remove it and render nothing.
+            if (payload.isCancel) {
+                Log.d(TAG, "V4 cancel: removing notifId=$notifId")
+                ctx.getSystemService(NotificationManager::class.java)
+                    .cancel(notifId)
+                return
+            }
 
             // Build the bare notification synchronously, then post; if the
             // image is in cache (and our /img/proxy sets a Cache-Control:
             // public,max-age=86400), it lands almost instantly. Image
             // download happens off-thread; once it finishes we re-post the
             // same notifId with the bitmap filled in.
-            Log.d(TAG, "V4 posting initial (no bitmap yet) notifId=$notifId")
-            post(ctx, notifId, payload, bmp = null)
-            Log.d(TAG, "V4 initial post ok")
+            val frameJson = frame.toString()
+            val cached = synchronized(bitmapCache) { bitmapCache[payload.imageUrl] }
+            Log.d(TAG, "V4 posting notifId=$notifId cachedBitmap=${cached != null}")
+            post(ctx, notifId, payload, cached, frameJson, mode)
 
-            if (payload.imageUrl.isNotBlank()) {
+            if (cached == null && payload.imageUrl.isNotBlank()) {
                 imageThread.execute {
                     try {
                         Log.d(TAG, "V4 fetching image: ${payload.imageUrl}")
@@ -67,7 +105,8 @@ object V4NotificationRenderer {
                             val bmp = BitmapFactory.decodeStream(stream)
                             if (bmp != null) {
                                 Log.d(TAG, "V4 image decoded ${bmp.width}x${bmp.height}, re-posting")
-                                post(ctx, notifId, payload, bmp)
+                                synchronized(bitmapCache) { bitmapCache[payload.imageUrl] = bmp }
+                                post(ctx, notifId, payload, bmp, frameJson, mode)
                             } else {
                                 Log.w(TAG, "V4 image decode returned null")
                             }
@@ -84,7 +123,8 @@ object V4NotificationRenderer {
 
     private fun post(
         ctx: Context, notifId: Int, p: V4Payload,
-        bmp: android.graphics.Bitmap?
+        bmp: android.graphics.Bitmap?,
+        frameJson: String = "", mode: CardMode = CardMode()
     ) {
         val collapsed = RemoteViews(ctx.packageName, R.layout.notification_collapsed)
         val expanded  = RemoteViews(ctx.packageName, R.layout.notification_expanded)
@@ -125,7 +165,7 @@ object V4NotificationRenderer {
             // Top-of-expanded banner + left-edge collapsed stripe are
             // driven from the SAME tier.bannerColor so the two surfaces
             // stay in sync.
-            expanded.setViewVisibility(R.id.notif_banner, View.VISIBLE)
+            expanded.setViewVisibility(R.id.notif_banner_wrap, View.VISIBLE)
             expanded.setInt(R.id.notif_banner,
                 "setBackgroundColor", tier.bannerColor)
             // Collapsed stripe: TOP for yellow, LEFT for amber. Two
@@ -143,6 +183,9 @@ object V4NotificationRenderer {
                     "setBackgroundColor", tier.bannerColor)
                 collapsed.setViewVisibility(R.id.notif_collapsed_top_stripe, View.GONE)
             }
+            // Tier deals keep their own text-icon; the leading footer head
+            // is a bundle-only element.
+            expanded.setViewVisibility(R.id.notif_footer_head, View.GONE)
             val footerParts = tier.footerParts
             if (footerParts != null) {
                 // Multi-colour render: fig_sum in asking-blue, pct +
@@ -150,28 +193,144 @@ object V4NotificationRenderer {
                 // muted grey. Colours pulled from the same V4Style
                 // block the price grid uses, so a tweak in the
                 // Settings panel propagates.
-                expanded.setViewVisibility(R.id.notif_footer, View.VISIBLE)
+                expanded.setViewVisibility(R.id.notif_footer_row, View.VISIBLE)
                 expanded.setTextViewText(R.id.notif_footer,
                     tierFooterSpannable(footerParts, s))
             } else if (tier.footer.isNotBlank()) {
-                expanded.setViewVisibility(R.id.notif_footer, View.VISIBLE)
+                expanded.setViewVisibility(R.id.notif_footer_row, View.VISIBLE)
                 expanded.setTextViewText(R.id.notif_footer, tier.footer)
             } else {
-                expanded.setViewVisibility(R.id.notif_footer, View.GONE)
+                expanded.setViewVisibility(R.id.notif_footer_row, View.GONE)
             }
         } else {
-            expanded.setViewVisibility(R.id.notif_banner, View.GONE)
+            expanded.setViewVisibility(R.id.notif_banner_wrap, View.GONE)
             collapsed.setViewVisibility(R.id.notif_collapsed_stripe, View.GONE)
             collapsed.setViewVisibility(R.id.notif_collapsed_top_stripe, View.GONE)
             if (p.kind == "bundle" && p.bundleLine.isNotBlank()) {
                 // Bundles: no tier banner/stripe, but the footer slot
-                // carries the server-composed figs line ("8 figs •
-                // £1.01/fig" or the vision estimate) — the same
-                // position the profit line occupies on tiered deals.
-                expanded.setViewVisibility(R.id.notif_footer, View.VISIBLE)
-                expanded.setTextViewText(R.id.notif_footer, p.bundleLine)
+                // carries the server-composed figs line. A minifig head
+                // tinted to the top fig's value band leads it (replacing
+                // the old orange diamond); grey when no band applies.
+                expanded.setViewVisibility(R.id.notif_footer_row, View.VISIBLE)
+                // Coloured per-token render when the payload carries parts
+                // (total blue, profit green/red, rest grey); flat text else.
+                if (p.bundleParts != null) {
+                    expanded.setTextViewText(R.id.notif_footer,
+                        bundleFooterSpannable(p.bundleParts, s))
+                } else {
+                    expanded.setTextViewText(R.id.notif_footer, p.bundleLine)
+                }
+                expanded.setViewVisibility(R.id.notif_footer_head, View.VISIBLE)
+                val headTint = if (p.iconColor.isNotBlank()) {
+                    try { Color.parseColor(p.iconColor) }
+                    catch (_: Exception) { Color.parseColor("#8A8A95") }
+                } else Color.parseColor("#8A8A95")
+                expanded.setInt(R.id.notif_footer_head, "setColorFilter", headTint)
             } else {
-                expanded.setViewVisibility(R.id.notif_footer, View.GONE)
+                expanded.setViewVisibility(R.id.notif_footer_row, View.GONE)
+            }
+        }
+        applyFigBands(p, collapsed, expanded, s)
+
+        // ── 🎯 Grail (2026-09-08, Mat's design) ────────────────────────
+        // The banner across the top turns violet — deliberately NOT a
+        // tier colour — and a small tab hangs from its right end with the
+        // golden-brick mark and one word. The tab is the link to the
+        // grail's OWN catalogue page (set or fig). Collapsed row: violet
+        // top + side stripes and the same tab, so a grail is picked out
+        // of the list without opening it. Everything else on the card is
+        // untouched (head, price rows, footer, actions).
+        val grail = p.grail
+        if (grail != null) {
+            val violet = Color.parseColor(GRAIL_COLOR)
+            expanded.setViewVisibility(R.id.notif_banner_wrap, View.VISIBLE)
+            expanded.setInt(R.id.notif_banner, "setBackgroundColor", violet)
+            expanded.setViewVisibility(R.id.notif_grail_tab, View.VISIBLE)
+            // Collapsed: violet top stripe + the thumbnail's violet ring and
+            // corner badge (2026-09-09; the earlier inline pill "looked
+            // terrible"). No left stripe — the L was heavy.
+            collapsed.setViewVisibility(R.id.notif_collapsed_top_stripe, View.VISIBLE)
+            collapsed.setInt(R.id.notif_collapsed_top_stripe,
+                "setBackgroundColor", violet)
+            collapsed.setViewVisibility(R.id.notif_collapsed_stripe, View.GONE)
+            collapsed.setViewVisibility(R.id.notif_grail_tab, View.VISIBLE)
+            if (grail.catalogueUrl.isNotBlank()) {
+                val pi = openInAppIntent(ctx, grail.catalogueUrl, "grail:" + p.listingId)
+                expanded.setOnClickPendingIntent(R.id.notif_grail_tab, pi)
+                collapsed.setOnClickPendingIntent(R.id.notif_grail_tab, pi)
+            }
+        } else {
+            expanded.setViewVisibility(R.id.notif_grail_tab, View.GONE)
+            collapsed.setViewVisibility(R.id.notif_grail_tab, View.GONE)
+        }
+
+        // ── In-place modes (2026-09-09): info block / photo size ───────
+        // The info face (dashboard card's ⓘ, same expressions + colours,
+        // decided server-side) sits top-right of the photo. Tap → the card
+        // redraws with the INFO BLOCK in place of the photo, laid out like
+        // the app's sheet; the face on the block closes it. Tap the photo
+        // → the card redraws with the photo taller; tap again to shrink.
+        // Both are broadcasts, so the shade stays open. The vision row in
+        // the block opens the vision bottom sheet (a real screen).
+        val card = p.infoCard
+        val hasIds = p.listingId.isNotBlank() && p.apiBase.isNotBlank()
+        if (mode.infoOpen && card != null) {
+            expanded.setViewVisibility(R.id.notif_thumb_wrap, View.GONE)
+            // The system caps a notification's height (the photo version
+            // sits just under it). With the block open, the price grid and
+            // tier footer hide too — the block's table carries the same
+            // references — so the whole block fits (2026-09-09: it was
+            // cut off after "Seller says").
+            expanded.setViewVisibility(R.id.notif_row1, View.GONE)
+            expanded.setViewVisibility(R.id.notif_row2, View.GONE)
+            expanded.setViewVisibility(R.id.notif_footer_row, View.GONE)
+            expanded.setViewVisibility(R.id.notif_info_block, View.VISIBLE)
+            fillInfoBlock(expanded, card)
+            // "Full details ▸" → the info window (the dashboard's sheet).
+            expanded.setOnClickPendingIntent(R.id.notif_info_figs_line, infoSheetIntent(ctx, p))
+            expanded.setImageViewResource(R.id.notif_info_close, R.drawable.ic_deal_check)
+            expanded.setInt(R.id.notif_info_close, "setColorFilter", saysColor(card.checkKind))
+            expanded.setOnClickPendingIntent(R.id.notif_info_close,
+                redrawIntent(ctx, p, frameJson, mode.copy(infoOpen = false), "info-close"))
+            expanded.setOnClickPendingIntent(R.id.notif_info_vision, visionSheetIntent(ctx, p))
+        } else {
+            expanded.setViewVisibility(R.id.notif_info_block, View.GONE)
+            expanded.setViewVisibility(R.id.notif_thumb_wrap, View.VISIBLE)
+            expanded.setViewVisibility(R.id.notif_thumb,
+                if (mode.photoBig) View.GONE else View.VISIBLE)
+            expanded.setViewVisibility(R.id.notif_thumb_big,
+                if (mode.photoBig) View.VISIBLE else View.GONE)
+            if (mode.photoBig) {
+                // Same height cap as the info block: give the taller photo
+                // the grid's and footer's room, and show it WHOLE
+                // (fitCenter) rather than a centre crop that only looked
+                // zoomed (2026-09-09).
+                expanded.setViewVisibility(R.id.notif_row1, View.GONE)
+                expanded.setViewVisibility(R.id.notif_row2, View.GONE)
+                expanded.setViewVisibility(R.id.notif_footer_row, View.GONE)
+            }
+            // Photo tap → the in-app window: photo large, info box under it
+            // (Mat, 2026-09-09: growing the card was "no better" under the
+            // height cap). The in-place big-photo mode is kept in code but
+            // no longer wired to a tap.
+            if (hasIds) {
+                expanded.setOnClickPendingIntent(R.id.notif_thumb, infoSheetIntent(ctx, p))
+                expanded.setOnClickPendingIntent(R.id.notif_thumb_big, infoSheetIntent(ctx, p))
+            }
+            if (hasIds) {
+                expanded.setViewVisibility(R.id.notif_face_btn, View.VISIBLE)
+                // Speech bubble = "what the seller says" (2026-09-09); amber
+                // when something is missing, green when they say complete.
+                expanded.setImageViewResource(R.id.notif_face_btn,
+                    if (card != null) R.drawable.ic_deal_check else faceDrawable(p.face))
+                expanded.setInt(R.id.notif_face_btn, "setColorFilter",
+                    if (card != null) saysColor(card.checkKind) else faceColor(p.face))
+                expanded.setOnClickPendingIntent(R.id.notif_face_btn,
+                    if (card != null && frameJson.isNotBlank())
+                        redrawIntent(ctx, p, frameJson, mode.copy(infoOpen = true), "info-open")
+                    else infoSheetIntent(ctx, p))
+            } else {
+                expanded.setViewVisibility(R.id.notif_face_btn, View.GONE)
             }
         }
 
@@ -228,6 +387,7 @@ object V4NotificationRenderer {
         if (bmp != null) {
             collapsed.setImageViewBitmap(R.id.notif_thumb, bmp)
             expanded.setImageViewBitmap(R.id.notif_thumb, bmp)
+            expanded.setImageViewBitmap(R.id.notif_thumb_big, bmp)
         } else {
             // Placeholder while the image is downloading. Plain dark
             // square keeps the layout from jumping when the bitmap
@@ -235,6 +395,8 @@ object V4NotificationRenderer {
             collapsed.setInt(R.id.notif_thumb,
                 "setBackgroundColor", Color.parseColor("#222222"))
             expanded.setInt(R.id.notif_thumb,
+                "setBackgroundColor", Color.parseColor("#222222"))
+            expanded.setInt(R.id.notif_thumb_big,
                 "setBackgroundColor", Color.parseColor("#222222"))
         }
 
@@ -248,17 +410,43 @@ object V4NotificationRenderer {
         // Fig-value head on the card title row — the noticon tinted to
         // the band colour, right after the %. Both surfaces; hidden
         // when no band applies.
-        if (p.iconColor.isNotBlank()) {
+        if (p.kind == "bundle") {
+            // Bundle marker: stacked bricks + muted grey head, sitting
+            // together (no separator) after "• £X •". Grey — not a fig-
+            // value band colour — because a bundle's contents (sets or
+            // figs) and their value are unknown. Both tinted the same
+            // muted grey so they read as one "bundle" unit.
+            // Option D (Mat, 2026-09-11): bricks retired. The row now
+            // carries the profit text; the head stays last, tinted to the
+            // top fig's value band when there is one.
+            for (rv in listOf(collapsed, expanded)) {
+                rv.setViewVisibility(R.id.notif_bundle_bricks, View.GONE)
+                if (p.iconColor.isNotBlank()) {
+                    try {
+                        rv.setViewVisibility(R.id.notif_fig_head, View.VISIBLE)
+                        rv.setInt(R.id.notif_fig_head, "setColorFilter",
+                                  Color.parseColor(p.iconColor))
+                    } catch (_: Exception) {
+                        rv.setViewVisibility(R.id.notif_fig_head, View.GONE)
+                    }
+                } else {
+                    rv.setViewVisibility(R.id.notif_fig_head, View.GONE)
+                }
+            }
+        } else if (p.iconColor.isNotBlank()) {
             try {
                 val band = Color.parseColor(p.iconColor)
                 for (rv in listOf(collapsed, expanded)) {
+                    rv.setViewVisibility(R.id.notif_bundle_bricks, View.GONE)
                     rv.setViewVisibility(R.id.notif_fig_head, View.VISIBLE)
                     rv.setInt(R.id.notif_fig_head, "setColorFilter", band)
                 }
             } catch (_: Exception) {}
         } else {
-            collapsed.setViewVisibility(R.id.notif_fig_head, View.GONE)
-            expanded.setViewVisibility(R.id.notif_fig_head, View.GONE)
+            for (rv in listOf(collapsed, expanded)) {
+                rv.setViewVisibility(R.id.notif_bundle_bricks, View.GONE)
+                rv.setViewVisibility(R.id.notif_fig_head, View.GONE)
+            }
         }
 
         // Priority: server-sent icon_color (max-fig-value band, matching
@@ -267,6 +455,9 @@ object V4NotificationRenderer {
         // in the status bar becomes a value cue for the best fig in the
         // set at a glance.
         val accent = when {
+            // A grail's status-bar icon goes violet so it stands out in
+            // the stacked tray, where our custom views are not drawn.
+            p.grail != null -> Color.parseColor(GRAIL_COLOR)
             p.iconColor.isNotBlank() -> try {
                 Color.parseColor(p.iconColor)
             } catch (_: Exception) {
@@ -277,11 +468,37 @@ object V4NotificationRenderer {
             else -> Color.parseColor("#3B98E0")  // brand blue
         }
 
-        val builder = NotificationCompat.Builder(ctx, CHANNEL_ID)
+        // RED ALERT — paint the whole body, not just an accent. The
+        // server decides this (see _is_red_alert in notifications.py);
+        // the app only renders it, so thresholds retune without an APK.
+        // Both layout roots are painted because the collapsed view is
+        // what shows on the lock screen and in the heads-up popup.
+        if (p.redAlert) {
+            val redBg = Color.parseColor(RED_ALERT_BG)
+            collapsed.setInt(R.id.notif_root_collapsed,
+                             "setBackgroundColor", redBg)
+            expanded.setInt(R.id.notif_root_expanded,
+                            "setBackgroundColor", redBg)
+        } else {
+            // Option D: whole body by profit band (bundles only — the
+            // server sends band="" for everything else).
+            val bg = bandBodyColor(p)
+            if (bg != null) {
+                collapsed.setInt(R.id.notif_root_collapsed, "setBackgroundColor", bg)
+                expanded.setInt(R.id.notif_root_expanded, "setBackgroundColor", bg)
+            }
+        }
+
+        val builder = NotificationCompat.Builder(
+                ctx, if (p.redAlert) RED_CHANNEL_ID else CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification_head)
-            .setColor(accent)
+            .setColor(if (p.redAlert) Color.parseColor(RED_ALERT_BG)
+                      else accent)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
+            // Same-ID re-posts (the bitmap fill-in, and in-place card
+            // updates via replace_key) must not re-buzz.
+            .setOnlyAlertOnce(true)
             .setCustomContentView(collapsed)
             .setCustomBigContentView(expanded)
             .setStyle(NotificationCompat.DecoratedCustomViewStyle())
@@ -289,12 +506,46 @@ object V4NotificationRenderer {
             // Settings stays useful; the custom view overrides display.
             .setContentTitle("${brandLabel(p.brand)} • ${p.pct}%")
 
+        // Follow-up appraisal cards (server "update": true) are fully
+        // silent even if the original was dismissed — the numbers just
+        // arrive; only genuinely new listings should make noise.
+        if (p.isUpdate) builder.setSilent(true)
+
         addAction(ctx, builder, "Listing",   p.listingUrl,   p.kind, msgIdSuffix = "L")
         addAction(ctx, builder, "Monitor",   p.monitorUrl,   p.kind, msgIdSuffix = "M")
-        addAction(ctx, builder, "Catalogue", p.catalogueUrl, p.kind, msgIdSuffix = "C")
+        // Third button: a set's catalogue page, or — for bundles, which
+        // have no set page — VISION (Mat, 2026-09-09), opening the native
+        // vision bottom sheet rather than the web fig-breakdown page.
+        val wantsVision = p.kind == "bundle" || p.catalogueUrl.contains("/vision")
+        if (wantsVision && p.listingId.isNotBlank() && p.apiBase.isNotBlank()) {
+            builder.addAction(0, "Vision", visionSheetIntent(ctx, p))
+        } else if (wantsVision) {
+            addAction(ctx, builder, "Vision", p.catalogueUrl, p.kind, msgIdSuffix = "C")
+        } else {
+            addAction(ctx, builder, "Catalogue", p.catalogueUrl, p.kind, msgIdSuffix = "C")
+        }
 
         ctx.getSystemService(NotificationManager::class.java)
             .notify(notifId, builder.build())
+    }
+
+    /** Row text colour for the bundle profit, by band. On the red body the
+     * text goes white; green/amber use the band's own colour; no band =
+     * muted grey, and the pre-vision "checking…" is dimmer still. */
+    private fun bandTextColor(p: V4Payload): Int = when (p.band) {
+        "red"   -> Color.WHITE
+        "green" -> Color.parseColor("#4CC38A")
+        "amber" -> Color.parseColor("#E8C23A")
+        else    -> if (p.bundleTail.startsWith("checking")) Color.parseColor("#6A6F75")
+                   else Color.parseColor("#8F949A")
+    }
+
+    /** Body colour for the band — the whole card below the app header. */
+    private fun bandBodyColor(p: V4Payload): Int? = when (p.band) {
+        "red"   -> Color.parseColor(RED_ALERT_BG)
+        "green" -> Color.parseColor("#0F3D27")
+        "amber" -> Color.parseColor("#4A3606")
+        else    -> null
     }
 
     /** The text AFTER the brand wordmark — " • 56%" or
@@ -306,11 +557,51 @@ object V4NotificationRenderer {
         val s = p.style
         val sb = SpannableStringBuilder()
         sb.append("• ")
+        // AUCTION: the countdown leads the row, before the price (Mat,
+        // 2026-09-11: "we still don't know it is an auction because it
+        // cuts it off" — last on the row it was the first thing ellipsised).
+        val mlFirst = p.minsLeft
+        if (mlFirst != null && mlFirst > 0) {
+            val ts = sb.length
+            sb.append("\uD83D\uDD28 ${mlFirst}m")
+            sb.setSpan(ForegroundColorSpan(Color.parseColor("#F5AF02")),
+                ts, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            sb.setSpan(StyleSpan(android.graphics.Typeface.BOLD),
+                ts, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            sb.append(" • ")
+        }
+        // Asking price on the title line — the number that decides whether a
+        // deal is worth opening. Kept here (not just in the price grid below)
+        // so it survives the collapsed / stacked tray view, where the grid is
+        // hidden. Blue to match the card headline; rounded so title and grid
+        // agree (fillGridRow uses the same asking.roundToInt()).
+        val priceStart = sb.length
+        sb.append("£${p.asking.roundToInt()}")
+        sb.setSpan(ForegroundColorSpan(Color.parseColor("#3B98E0")),
+            priceStart, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        // Bundles have no meaningful headline % (nothing to compare
+        // against, and no known fig value). Instead of a pct the title
+        // row carries the stacked-bricks marker + a muted grey head —
+        // both ImageViews, set VISIBLE in post(). Here we just close the
+        // text with a trailing "•" so it reads "[brand] • £19 •" and the
+        // bricks+head pair sit right after it as one "bundle" unit.
+        if (p.kind == "bundle") {
+            // Option D (Mat, 2026-09-11): the profit replaces the bricks —
+            // "• £108 • 🔥 +369%" coloured by band, then the auction
+            // countdown, then the head (last, as always).
+            if (p.bundleTail.isNotBlank()) {
+                sb.append(" • ")
+                val ts = sb.length
+                sb.append(p.bundleTail)
+                sb.setSpan(ForegroundColorSpan(bandTextColor(p)),
+                    ts, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            }
+            if (p.iconColor.isNotBlank()) sb.append(" •")
+            return sb
+        }
+        sb.append(" • ")
         val pctStart = sb.length
-        // Bundles have no meaningful headline % — the 📦 marker sits in
-        // the pct slot at the same scale, so collapsed reads
-        // "[brand] • 📦" exactly where a deal reads "[brand] • 67%".
-        sb.append(if (p.kind == "bundle") "\uD83D\uDCE6" else "${p.pct}%")
+        sb.append("${p.pct}%")
         val pctEnd = sb.length
         // Headline pct: RelativeSizeSpan scales it above the base, colour
         // from style.
@@ -318,18 +609,8 @@ object V4NotificationRenderer {
             pctStart, pctEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
         sb.setSpan(ForegroundColorSpan(s.titlePctColor),
             pctStart, pctEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-        if (p.isAuction && p.minsLeft != null) {
-            // Hammer emoji intentionally removed — the brand wordmark
-            // already conveys "this is from eBay auctions" and the
-            // timer reads cleanly without the icon.
-            val timerStart = sb.length
-            sb.append(" • ${p.minsLeft}m")
-            if (s.titleTimerScale != 1.0f) {
-                sb.setSpan(RelativeSizeSpan(s.titleTimerScale),
-                    timerStart, sb.length,
-                    Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-            }
-        }
+        // (Auction countdown now leads the row — see the top of this
+        // function — so nothing is appended here.)
         // Mat's spec: the head is the last element on the row, preceded
         // by the same plain "•" separator as everything else —
         // "ebay • 70% • [head]" / "ebay • 70% • 5m • [head]". Only
@@ -373,6 +654,107 @@ object V4NotificationRenderer {
         rv.setTextViewText(idPrice, priceStr)
         rv.setTextViewText(idCellA, cellSpannable(labA, valA, p.trueCost, styleA))
         rv.setTextViewText(idCellB, cellSpannable(labB, valB, p.trueCost, styleB))
+    }
+
+    /** Bundle footer rendered as a SpannableString (Mat, 2026-07-23):
+     *   [blue bold]{total}[/] [grey] • {figs}   {avg} • [/]
+     *   [green|red bold]{pct} • {profit}[/] [amber] {warn}[/]
+     * Total in asking-blue; the pct+profit group in positive-green or
+     * negative-red per `positive`; a wide gap between fig-count and average;
+     * everything else muted grey. Colours track V4Style so a Settings tweak
+     * propagates. */
+    private val CB_H = intArrayOf(R.id.notif_cb0_h, R.id.notif_cb1_h, R.id.notif_cb2_h, R.id.notif_cb3_h, R.id.notif_cb4_h, R.id.notif_cb5_h)
+    private val CB_N = intArrayOf(R.id.notif_cb0_n, R.id.notif_cb1_n, R.id.notif_cb2_n, R.id.notif_cb3_n, R.id.notif_cb4_n, R.id.notif_cb5_n)
+    private val FB_H = intArrayOf(R.id.notif_fb0_h, R.id.notif_fb1_h, R.id.notif_fb2_h, R.id.notif_fb3_h, R.id.notif_fb4_h, R.id.notif_fb5_h)
+    private val FB_N = intArrayOf(R.id.notif_fb0_n, R.id.notif_fb1_n, R.id.notif_fb2_n, R.id.notif_fb3_n, R.id.notif_fb4_n, R.id.notif_fb5_n)
+
+    /** One band slot: a head tinted to the band (or the outline head for
+     * figures nobody identified) and "×N". */
+    private fun fillBandSlot(rv: RemoteViews, headId: Int, textId: Int, band: FigBand?) {
+        if (band == null || band.n <= 0) {
+            rv.setViewVisibility(headId, View.GONE); rv.setViewVisibility(textId, View.GONE); return
+        }
+        if (band.color == "ghost") {
+            rv.setImageViewResource(headId, R.drawable.ic_head_outline)
+            rv.setInt(headId, "setColorFilter", Color.parseColor("#8B9096"))
+        } else {
+            rv.setImageViewResource(headId, R.drawable.ic_notification_head)
+            rv.setInt(headId, "setColorFilter",
+                try { Color.parseColor(band.color) } catch (_: Exception) { Color.parseColor("#8B9096") })
+        }
+        rv.setTextViewText(textId, "\u00D7${band.n}")
+        rv.setViewVisibility(headId, View.VISIBLE); rv.setViewVisibility(textId, View.VISIBLE)
+    }
+
+    /** Option B (Mat, 2026-09-14): figure bands, best first. Collapsed row:
+     * the bands that fit plus the white head with the whole lot, always at
+     * the far right; the title-row head goes. Expanded: the full band list
+     * leads the footer in place of the single head and the figs count. */
+    private fun applyFigBands(p: V4Payload, collapsed: RemoteViews, expanded: RemoteViews, s: V4Style) {
+        val fb = p.figBands
+        if (fb == null || fb.totalN <= 0) {
+            collapsed.setViewVisibility(R.id.notif_bands_row, View.GONE)
+            expanded.setViewVisibility(R.id.notif_footer_bands, View.GONE)
+            return
+        }
+        // collapsed
+        collapsed.setViewVisibility(R.id.notif_bands_row, View.VISIBLE)
+        collapsed.setViewVisibility(R.id.notif_fig_head, View.GONE)
+        for (i in CB_H.indices) fillBandSlot(collapsed, CB_H[i], CB_N[i], fb.bandsFit.getOrNull(i))
+        collapsed.setImageViewResource(R.id.notif_cb_tot_h, R.drawable.ic_notification_head)
+        collapsed.setInt(R.id.notif_cb_tot_h, "setColorFilter", Color.parseColor("#F2F2F2"))
+        collapsed.setTextViewText(R.id.notif_cb_tot_n,
+            if (fb.totalGbp != null) "\u00D7${fb.totalN} = \u00A3${fb.totalGbp}" else "\u00D7${fb.totalN} counted")
+        collapsed.setViewVisibility(R.id.notif_cb_tot_h, View.VISIBLE)
+        collapsed.setViewVisibility(R.id.notif_cb_tot_n, View.VISIBLE)
+        // expanded footer
+        expanded.setViewVisibility(R.id.notif_footer_row, View.VISIBLE)
+        expanded.setViewVisibility(R.id.notif_footer_head, View.GONE)
+        expanded.setViewVisibility(R.id.notif_footer_bands, View.VISIBLE)
+        for (i in FB_H.indices) fillBandSlot(expanded, FB_H[i], FB_N[i], fb.bands.getOrNull(i))
+        if (p.kind == "bundle" && p.bundleParts != null) {
+            expanded.setTextViewText(R.id.notif_footer, bundleFooterSpannable(p.bundleParts, s, compact = true))
+        }
+    }
+
+    private fun bundleFooterSpannable(b: BundleParts, s: V4Style, compact: Boolean = false): CharSequence {
+        val grey  = Color.parseColor("#9AA0A6")
+        val blue  = s.askingColor
+        val money = if (b.positive) s.cellBN.pctPosColor else s.cellBN.pctNegColor
+        val amber = Color.parseColor("#E0A53B")
+        val bold  = android.graphics.Typeface.BOLD
+
+        val sb = SpannableStringBuilder()
+        fun run(text: String, color: Int, boldRun: Boolean = false) {
+            if (text.isEmpty()) return
+            val st = sb.length
+            sb.append(text)
+            sb.setSpan(ForegroundColorSpan(color), st, sb.length,
+                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            if (boldRun) sb.setSpan(StyleSpan(bold), st, sb.length,
+                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        }
+
+        run(b.total, blue, true)                 // £142  (blue, bold)
+        if (!compact) {                          // bands already carry the counts
+            run(" • ", grey)
+            run(b.figs, grey)                    // 26 figs
+            run("   ", grey)                     // the requested gap
+            run(b.avg, grey)                     // x̄£5.5
+        }
+        run(" • ", grey)
+        run("${b.pct} • ${b.profit}", money, true)   // +103% • £72 (green/red)
+        if (b.auction.isNotBlank()) {
+            // Auction bundles carry a hammer + time remaining, in the
+            // tier-amber so the countdown reads as urgent.
+            run(" \u2022 ", grey)
+            run("\uD83D\uDD28 " + b.auction, amber, true)
+        }
+        if (b.warn.isNotBlank()) {
+            run("  ", grey)
+            run(b.warn, amber, true)             // ⚠2
+        }
+        return sb
     }
 
     /** Yellow / Amber tier footer rendered as a SpannableString:
@@ -488,6 +870,177 @@ object V4NotificationRenderer {
         else       -> brand.replaceFirstChar { it.uppercase() }
     }
 
+    // Violet on purpose: a grail must never read as a tier colour.
+    private const val GRAIL_COLOR = "#7C5CE6"
+
+    /** The dashboard's four face expressions, keyed by the server's
+     *  `face` state. Never the status-bar head icon — that one is sacred. */
+    private fun faceDrawable(state: String): Int = when (state) {
+        "good" -> R.drawable.ic_face_grin
+        "vis"  -> R.drawable.ic_face_look
+        "adj"  -> R.drawable.ic_face_hmm
+        else   -> R.drawable.ic_face_flat
+    }
+
+    private fun faceColor(state: String): Int = Color.parseColor(when (state) {
+        "good" -> "#4CC38A"   // vision ratio ≥ 1.5 — real margin
+        "vis"  -> "#F0A12A"   // vision has run
+        "adj"  -> "#FFD27A"   // references adjusted
+        else   -> "#C9C9C9"
+    })
+
+    /** Open a monitor URL (catalogue / listing deep link) INSIDE the app's
+     *  WebView, never a browser. MainActivity is singleTask so this lands
+     *  in the running instance. */
+    private fun openInAppIntent(ctx: Context, url: String, key: String): PendingIntent {
+        val i = Intent(ctx, MainActivity::class.java)
+            .putExtra(MainActivity.EXTRA_OPEN_URL, url)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        return PendingIntent.getActivity(
+            ctx, key.hashCode(), i,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+    }
+
+    private fun infoSheetIntent(ctx: Context, p: V4Payload): PendingIntent {
+        val i = Intent(ctx, InfoSheetActivity::class.java).apply {
+            putExtra(InfoSheetActivity.EXTRA_LISTING_ID, p.listingId)
+            putExtra(InfoSheetActivity.EXTRA_API_BASE, p.apiBase)
+            putExtra(InfoSheetActivity.EXTRA_TITLE, p.sellerTitle.ifBlank { p.setName })
+            putExtra(InfoSheetActivity.EXTRA_BRAND, brandLabel(p.brand))
+            putExtra(InfoSheetActivity.EXTRA_ASKING, p.asking)
+            putExtra(InfoSheetActivity.EXTRA_TRUE_COST, p.trueCost)
+            putExtra(InfoSheetActivity.EXTRA_LISTING_URL, p.listingUrl)
+            putExtra(InfoSheetActivity.EXTRA_MONITOR_URL, p.monitorUrl)
+            putExtra(InfoSheetActivity.EXTRA_PHOTO_URL, p.photoUrl)
+            putExtra(InfoSheetActivity.EXTRA_GRAIL_JSON, p.grail?.raw ?: "")
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        return PendingIntent.getActivity(
+            ctx, ("info:" + p.listingId).hashCode(), i,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+    }
+
+    /** Broadcast that re-posts this card in a new mode (in place). */
+    private fun redrawIntent(ctx: Context, p: V4Payload, frameJson: String,
+                             mode: CardMode, what: String): PendingIntent {
+        val i = Intent(ctx, CardActionReceiver::class.java).apply {
+            action = CardActionReceiver.ACTION_REDRAW
+            putExtra(CardActionReceiver.EXTRA_FRAME, frameJson)
+            putExtra(CardActionReceiver.EXTRA_PHOTO_BIG, mode.photoBig)
+            putExtra(CardActionReceiver.EXTRA_INFO_OPEN, mode.infoOpen)
+            putExtra(CardActionReceiver.EXTRA_INFO_PAGE, mode.infoPage)
+        }
+        return PendingIntent.getBroadcast(
+            ctx, ("redraw:$what:" + p.listingId).hashCode(), i,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+    }
+
+    /** Vision = the monitor's own fig-breakdown page (/vision?id=), opened
+     *  inside the app's WebView (Mat, 2026-09-09: "vision should open up
+     *  this page"). */
+    private fun visionSheetIntent(ctx: Context, p: V4Payload): PendingIntent {
+        val url = "${p.apiBase.trimEnd('/')}/vision?id=${Uri.encode(p.listingId)}"
+        // Its own window (not the main screen) so Back returns to wherever
+        // the notification was tapped from.
+        val i = Intent(ctx, InfoSheetActivity::class.java).apply {
+            putExtra(InfoSheetActivity.EXTRA_URL, url)
+            putExtra(InfoSheetActivity.EXTRA_API_BASE, p.apiBase)
+            putExtra(InfoSheetActivity.EXTRA_LISTING_ID, p.listingId)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        return PendingIntent.getActivity(
+            ctx, ("vision:" + p.listingId).hashCode(), i,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+    }
+
+    private data class RowIds(val row: Int, val l: Int, val a: Int, val b: Int)
+    private val TABLE_ROWS = listOf(
+        RowIds(R.id.notif_info_r0, R.id.notif_info_r0_l, R.id.notif_info_r0_a, R.id.notif_info_r0_b),
+        RowIds(R.id.notif_info_r1, R.id.notif_info_r1_l, R.id.notif_info_r1_a, R.id.notif_info_r1_b),
+        RowIds(R.id.notif_info_r2, R.id.notif_info_r2_l, R.id.notif_info_r2_a, R.id.notif_info_r2_b),
+        RowIds(R.id.notif_info_r3, R.id.notif_info_r3_l, R.id.notif_info_r3_a, R.id.notif_info_r3_b),
+    )
+    private val FIG_ROWS = listOf(
+        RowIds(R.id.notif_info_f0, R.id.notif_info_f0_num, R.id.notif_info_f0_name, R.id.notif_info_f0_val),
+        RowIds(R.id.notif_info_f1, R.id.notif_info_f1_num, R.id.notif_info_f1_name, R.id.notif_info_f1_val),
+        RowIds(R.id.notif_info_f2, R.id.notif_info_f2_num, R.id.notif_info_f2_name, R.id.notif_info_f2_val),
+        RowIds(R.id.notif_info_f3, R.id.notif_info_f3_num, R.id.notif_info_f3_name, R.id.notif_info_f3_val),
+        RowIds(R.id.notif_info_f4, R.id.notif_info_f4_num, R.id.notif_info_f4_name, R.id.notif_info_f4_val),
+    )
+
+    private fun saysColor(kind: String): Int = Color.parseColor(when (kind) {
+        "warn"  -> "#F2B35A"
+        "ok"    -> "#4CC38A"
+        "grail" -> "#9A82FF"
+        else    -> "#C9C9C9"
+    })
+
+    /** DEAL CHECK (2026-09-09, Mat: "the information necessary to make an
+     *  informed decision — tidy and uniform"). Fixed label column, one line
+     *  per row, colour only where it changes the decision. The rows come
+     *  ready-made from the Pi so this is pure layout. */
+    private fun fillInfoBlock(rv: RemoteViews, c: InfoCard) {
+        val dim = Color.parseColor("#8A9099"); val ink = Color.parseColor("#F2F2F2")
+        rv.setTextViewText(R.id.notif_info_head, "DEAL CHECK")
+        for (id in intArrayOf(R.id.notif_info_set, R.id.notif_info_l1, R.id.notif_info_l2)) {
+            rv.setViewVisibility(id, View.GONE)
+        }
+        rv.setViewVisibility(R.id.notif_info_table, View.GONE)
+        for (i in FIG_ROWS.indices) {
+            val ids = FIG_ROWS[i]
+            val row = c.rows.getOrNull(i)
+            if (row == null || row.size < 2 || row[1].isBlank()) { rv.setViewVisibility(ids.row, View.GONE); continue }
+            rv.setViewVisibility(ids.row, View.VISIBLE)
+            rv.setTextViewText(ids.l, row[0])
+            rv.setTextColor(ids.l, dim)
+            rv.setTextViewText(ids.a, row[1])
+            rv.setTextColor(ids.a, if ((row.getOrNull(2) ?: "").isBlank()) ink else saysColor(row[2]))
+            rv.setTextViewText(ids.b, "")
+        }
+        rv.setViewVisibility(R.id.notif_info_figs_line, View.VISIBLE)
+        rv.setTextViewText(R.id.notif_info_figs_line, "Full details ▸")
+        rv.setTextColor(R.id.notif_info_figs_line, Color.parseColor("#4A9EFF"))
+        rv.setViewVisibility(R.id.notif_info_vision, View.GONE)
+    }
+
+    private fun fillVisionRow(rv: RemoteViews, c: InfoCard) {
+        val ok = Color.parseColor("#4CC38A")
+        rv.setTextViewText(R.id.notif_info_vision_txt, c.visionLine.ifBlank { "Run vision" })
+        val vc = when (c.visionKind) {
+            "good" -> ok
+            "vis"  -> Color.parseColor("#F0A12A")
+            else   -> Color.parseColor("#E0A63A")
+        }
+        rv.setTextColor(R.id.notif_info_vision_txt, vc)
+        rv.setInt(R.id.notif_info_vision_icon, "setColorFilter", vc)
+    }
+
+    /** "£152 +74%" → value bold white, pct green (or red when negative). */
+    private fun cellSpannable(s: String): CharSequence {
+        val sp = s.indexOf(' ')
+        if (sp < 0) return s
+        val sb = SpannableStringBuilder(s)
+        sb.setSpan(StyleSpan(android.graphics.Typeface.BOLD), 0, sp,
+            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        val neg = s.length > sp + 1 && s[sp + 1] == '-'
+        sb.setSpan(ForegroundColorSpan(Color.parseColor(if (neg) "#E06060" else "#4CC38A")),
+            sp + 1, s.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        return sb
+    }
+
+    private fun photoIntent(ctx: Context, p: V4Payload): PendingIntent {
+        val i = Intent(ctx, PhotoViewerActivity::class.java).apply {
+            putExtra(PhotoViewerActivity.EXTRA_URL, p.photoUrl)
+            putExtra(PhotoViewerActivity.EXTRA_TITLE, p.sellerTitle.ifBlank { p.setName })
+            putExtra(PhotoViewerActivity.EXTRA_SUB,
+                "${brandLabel(p.brand)} · £${p.asking.roundToInt()}")
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        return PendingIntent.getActivity(
+            ctx, ("photo:" + p.listingId).hashCode(), i,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+    }
+
     private fun addAction(
         ctx: Context, b: NotificationCompat.Builder,
         label: String, url: String, kind: String, msgIdSuffix: String
@@ -504,6 +1057,7 @@ object V4NotificationRenderer {
 
     private fun ensureChannel(ctx: Context) {
         if (Build.VERSION.SDK_INT < 26) return
+        val mgr = ctx.getSystemService(NotificationManager::class.java)
         val ch = NotificationChannel(
             CHANNEL_ID, "Deal alerts",
             NotificationManager.IMPORTANCE_HIGH
@@ -511,7 +1065,28 @@ object V4NotificationRenderer {
             description = "LEGO marketplace deal notifications"
             enableVibration(true)
         }
-        ctx.getSystemService(NotificationManager::class.java)
-            .createNotificationChannel(ch)
+        mgr.createNotificationChannel(ch)
+
+        // SEPARATE CHANNEL for "drop everything" deals. Colour only helps
+        // if you happen to be looking at the screen — a red notification
+        // in a pocket is identical to a grey one. Its own channel gives
+        // it a distinct sound and a heavier vibration, and (Android 13+)
+        // lets the user grant it DND bypass in Settings while ordinary
+        // deals stay quiet. Measured to fire ~1.9x/day at the default
+        // thresholds; keeping it rare is what keeps it meaningful.
+        val red = NotificationChannel(
+            RED_CHANNEL_ID, "Definite buys",
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description =
+                "Exceptional deals only — high profit or a very cheap " +
+                "high-value bundle. Rare by design (~2/day)."
+            enableVibration(true)
+            vibrationPattern = longArrayOf(0, 400, 150, 400, 150, 400)
+            enableLights(true)
+            lightColor = Color.parseColor(RED_ALERT_BG)
+            setBypassDnd(true)
+        }
+        mgr.createNotificationChannel(red)
     }
 }

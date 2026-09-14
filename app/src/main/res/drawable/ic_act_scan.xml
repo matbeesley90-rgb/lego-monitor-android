@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Sheet action: Vision (#ic-scan). White artwork; tint at runtime with setColorFilter / app:tint. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <path android:pathData="M3.5 8V5.8A2.3 2.3 0 0 1 5.8 3.5H8M16 3.5h2.2a2.3 2.3 0 0 1 2.3 2.3V8M20.5 16v2.2a2.3 2.3 0 0 1-2.3 2.3H16M8 20.5H5.8a2.3 2.3 0 0 1-2.3-2.3V16" android:strokeColor="#FFFFFFFF" android:strokeWidth="1.6" android:strokeLineCap="round" />
+    <path android:pathData="M9.6 7.2h4.8v1.2h.4c.9 0 1.6.7 1.6 1.6v4.6c0 .9-.7 1.6-1.6 1.6h-.4v1.2H9.6v-1.2h-.4c-.9 0-1.6-.7-1.6-1.6V10c0-.9.7-1.6 1.6-1.6h.4z" android:fillColor="#FFFFFFFF" android:fillAlpha="0.28" />
+    <path android:pathData="M9.6 7.2h4.8v1.2h.4c.9 0 1.6.7 1.6 1.6v4.6c0 .9-.7 1.6-1.6 1.6h-.4v1.2H9.6v-1.2h-.4c-.9 0-1.6-.7-1.6-1.6V10c0-.9.7-1.6 1.6-1.6h.4z" android:strokeColor="#FFFFFFFF" android:strokeWidth="1.5" />
+    <path android:pathData="M5.2 12.4h13.6" android:strokeColor="#FFFFFFFF" android:strokeWidth="1.8" android:strokeLineCap="round" />
+</vector>

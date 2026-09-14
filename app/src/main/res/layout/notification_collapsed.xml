@@ -15,6 +15,7 @@
   left-edge stripe (Amber) and the existing thumb/title stack.
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/notif_root_collapsed"
     android:layout_width="match_parent"
     android:layout_height="64dp"
     android:orientation="vertical"
@@ -49,7 +50,29 @@
         android:layout_width="0dp"
         android:layout_height="match_parent"
         android:layout_weight="1"
-        android:padding="8dp">
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp"
+        android:paddingTop="6dp"
+        android:paddingBottom="6dp"
+        android:clipToPadding="false">
+
+    <!-- 2026-09-09 (Mat): a little square block hanging from the far right
+         of the violet top stripe — the expanded tab in miniature. The
+         negative top margin puts it flush under the stripe; clipToPadding
+         off on the row is what stops it being cut. GONE unless grail. -->
+    <ImageView
+        android:id="@+id/notif_grail_tab"
+        android:layout_width="18dp"
+        android:layout_height="18dp"
+        android:layout_alignParentTop="true"
+        android:layout_alignParentEnd="true"
+        android:layout_marginTop="-8dp"
+        android:layout_marginEnd="-8dp"
+        android:padding="2dp"
+        android:background="@drawable/bg_grail_tab"
+        android:src="@drawable/ic_grail_brick"
+        android:visibility="gone"
+        android:contentDescription="Grail" />
 
     <ImageView
         android:id="@+id/notif_thumb"
@@ -88,6 +111,19 @@
             android:includeFontPadding="false"
             android:ellipsize="end" />
 
+        <!-- Bundle marker: stacked bricks, tinted muted grey, sitting
+             right after "• £X •". Pairs with the grey head that follows
+             (no separator — one "bundle" unit). GONE for non-bundles. -->
+        <ImageView
+            android:id="@+id/notif_bundle_bricks"
+            android:layout_width="13dp"
+            android:layout_height="13dp"
+            android:layout_marginStart="5dp"
+            android:layout_gravity="center_vertical"
+            android:src="@drawable/ic_notification_bundle"
+            android:visibility="gone"
+            android:contentDescription="@null" />
+
         <!-- Fig-value head: the noticon, tinted to the max-fig band,
              sitting right after the %. GONE unless a band applies. -->
         <ImageView
@@ -101,15 +137,69 @@
             android:contentDescription="@null" />
     </LinearLayout>
 
+    <!-- 2026-09-14 (Mat, Option B): figure bands, best first, and the white
+         head with the whole lot at the far right — always visible. Six
+         band slots + the total; unused slots stay GONE. -->
+    <LinearLayout
+        android:id="@+id/notif_bands_row"
+        android:layout_width="match_parent"
+        android:layout_height="15dp"
+        android:layout_toEndOf="@id/notif_thumb"
+        android:layout_below="@id/notif_title_row"
+        android:layout_marginStart="10dp"
+        android:layout_marginTop="1dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:visibility="gone">
+            <ImageView android:id="@+id/notif_cb0_h" android:layout_width="12dp" android:layout_height="12dp"
+                android:layout_marginEnd="2dp" android:src="@drawable/ic_notification_head" android:visibility="gone" android:contentDescription="@null" />
+            <TextView android:id="@+id/notif_cb0_n" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:layout_marginEnd="6dp" android:textSize="11sp" android:textStyle="bold" android:textColor="#D7D9DD"
+                android:singleLine="true" android:includeFontPadding="false" android:visibility="gone" />
+            <ImageView android:id="@+id/notif_cb1_h" android:layout_width="12dp" android:layout_height="12dp"
+                android:layout_marginEnd="2dp" android:src="@drawable/ic_notification_head" android:visibility="gone" android:contentDescription="@null" />
+            <TextView android:id="@+id/notif_cb1_n" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:layout_marginEnd="6dp" android:textSize="11sp" android:textStyle="bold" android:textColor="#D7D9DD"
+                android:singleLine="true" android:includeFontPadding="false" android:visibility="gone" />
+            <ImageView android:id="@+id/notif_cb2_h" android:layout_width="12dp" android:layout_height="12dp"
+                android:layout_marginEnd="2dp" android:src="@drawable/ic_notification_head" android:visibility="gone" android:contentDescription="@null" />
+            <TextView android:id="@+id/notif_cb2_n" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:layout_marginEnd="6dp" android:textSize="11sp" android:textStyle="bold" android:textColor="#D7D9DD"
+                android:singleLine="true" android:includeFontPadding="false" android:visibility="gone" />
+            <ImageView android:id="@+id/notif_cb3_h" android:layout_width="12dp" android:layout_height="12dp"
+                android:layout_marginEnd="2dp" android:src="@drawable/ic_notification_head" android:visibility="gone" android:contentDescription="@null" />
+            <TextView android:id="@+id/notif_cb3_n" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:layout_marginEnd="6dp" android:textSize="11sp" android:textStyle="bold" android:textColor="#D7D9DD"
+                android:singleLine="true" android:includeFontPadding="false" android:visibility="gone" />
+            <ImageView android:id="@+id/notif_cb4_h" android:layout_width="12dp" android:layout_height="12dp"
+                android:layout_marginEnd="2dp" android:src="@drawable/ic_notification_head" android:visibility="gone" android:contentDescription="@null" />
+            <TextView android:id="@+id/notif_cb4_n" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:layout_marginEnd="6dp" android:textSize="11sp" android:textStyle="bold" android:textColor="#D7D9DD"
+                android:singleLine="true" android:includeFontPadding="false" android:visibility="gone" />
+            <ImageView android:id="@+id/notif_cb5_h" android:layout_width="12dp" android:layout_height="12dp"
+                android:layout_marginEnd="2dp" android:src="@drawable/ic_notification_head" android:visibility="gone" android:contentDescription="@null" />
+            <TextView android:id="@+id/notif_cb5_n" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:layout_marginEnd="6dp" android:textSize="11sp" android:textStyle="bold" android:textColor="#D7D9DD"
+                android:singleLine="true" android:includeFontPadding="false" android:visibility="gone" />
+            <View android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1" />
+            <ImageView android:id="@+id/notif_cb_tot_h" android:layout_width="12dp" android:layout_height="12dp"
+                android:layout_marginEnd="2dp" android:src="@drawable/ic_notification_head" android:visibility="gone" android:contentDescription="@null" />
+            <TextView android:id="@+id/notif_cb_tot_n" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:textSize="11sp" android:textStyle="bold" android:textColor="#FFFFFF"
+                android:singleLine="true" android:includeFontPadding="false" android:visibility="gone" />
+    </LinearLayout>
+
     <TextView
         android:id="@+id/notif_subtitle"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_toEndOf="@id/notif_thumb"
-        android:layout_below="@id/notif_title_row"
+        android:layout_below="@id/notif_bands_row"
         android:layout_marginStart="10dp"
-        android:textSize="12sp"
+        android:layout_marginTop="1dp"
+        android:textSize="11sp"
         android:singleLine="true"
+        android:includeFontPadding="false"
         android:ellipsize="end" />
 
     </RelativeLayout>

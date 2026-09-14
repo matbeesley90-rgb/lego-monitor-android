@@ -14,6 +14,7 @@
     [r?_price] [r?_div] [r?_cell_a]    [r?_cell_b]
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/notif_root_expanded"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
@@ -26,14 +27,62 @@
          Uses ImageView (not bare View) — Samsung's notification
          compositor sometimes rejects bare <View> elements in
          RemoteViews. ImageView is rock-solid. -->
-    <ImageView
-        android:id="@+id/notif_banner"
+    <!-- 2026-09-08: wrapped so the 🎯 grail tab can hang from the banner's
+         right end. The wrap is what gets shown/hidden now; the banner
+         keeps its id for setBackgroundColor. -->
+    <FrameLayout
+        android:id="@+id/notif_banner_wrap"
         android:layout_width="match_parent"
-        android:layout_height="6dp"
+        android:layout_height="wrap_content"
         android:layout_marginBottom="8dp"
-        android:scaleType="fitXY"
-        android:contentDescription="@null"
-        android:visibility="gone" />
+        android:visibility="gone">
+
+        <ImageView
+            android:id="@+id/notif_banner"
+            android:layout_width="match_parent"
+            android:layout_height="6dp"
+            android:layout_gravity="top"
+            android:scaleType="fitXY"
+            android:contentDescription="@null" />
+
+        <!-- Grail tab: violet, rounded bottom corners, golden-brick mark +
+             one word. Tap → the grail's own catalogue page. GONE unless
+             the payload carries a `grail` block. -->
+        <!-- 2026-09-09: the tab starts at the very top and its first 6dp
+             sit ON the banner (same violet), so there can be no seam
+             between banner and tab whatever the compositor rounds. -->
+        <LinearLayout
+            android:id="@+id/notif_grail_tab"
+            android:layout_width="wrap_content"
+            android:layout_height="26dp"
+            android:layout_gravity="top|end"
+            android:layout_marginEnd="10dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingTop="6dp"
+            android:paddingStart="7dp"
+            android:paddingEnd="8dp"
+            android:background="@drawable/bg_grail_tab"
+            android:visibility="gone">
+
+            <ImageView
+                android:layout_width="15dp"
+                android:layout_height="15dp"
+                android:src="@drawable/ic_grail_brick"
+                android:contentDescription="@null" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="5dp"
+                android:text="GRAIL"
+                android:textSize="9sp"
+                android:textStyle="bold"
+                android:textColor="#FFFFFFFF"
+                android:letterSpacing="0.18"
+                android:includeFontPadding="false" />
+        </LinearLayout>
+    </FrameLayout>
 
     <!-- Title row: brand wordmark (image) + " • " + green pct + optional " • 🔨 timer" -->
     <LinearLayout
@@ -60,8 +109,23 @@
             android:includeFontPadding="false"
             android:ellipsize="end" />
 
-        <!-- Fig-value head: the noticon, tinted to the max-fig band,
-             sitting right after the %. GONE unless a band applies. -->
+        <!-- Bundle marker: stacked bricks, tinted muted grey, sitting
+             right after "• £X •". Pairs with the grey head that follows
+             it (no separator between them — one "bundle" unit). GONE for
+             non-bundle deals. -->
+        <ImageView
+            android:id="@+id/notif_bundle_bricks"
+            android:layout_width="15dp"
+            android:layout_height="15dp"
+            android:layout_marginStart="6dp"
+            android:layout_gravity="center_vertical"
+            android:src="@drawable/ic_notification_bundle"
+            android:visibility="gone"
+            android:contentDescription="@null" />
+
+        <!-- Fig-value head: the noticon, tinted to the max-fig band on
+             sets (sitting right after the %), or muted grey on bundles
+             (sitting right after the bricks). GONE unless it applies. -->
         <ImageView
             android:id="@+id/notif_fig_head"
             android:layout_width="15dp"
@@ -87,8 +151,10 @@
         android:layout_marginTop="2dp" />
 
 
-    <!-- Grid row 1: New prices -->
+    <!-- Grid row 1: New prices (id'd 2026-09-09 so the in-card info block
+         can hide the grid while it is open — the height cap is tight) -->
     <LinearLayout
+        android:id="@+id/notif_row1"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
@@ -180,23 +246,576 @@
          auctions. Carries the "🟡 £142 • +69% £58 profit" fig-stack
          summary for Yellow / Amber tier deals. -->
 
-    <TextView
-        android:id="@+id/notif_footer"
+    <!-- Footer row: a minifig head tinted to the top fig's value band
+         (replaces the old orange diamond) leads the figs summary. -->
+    <LinearLayout
+        android:id="@+id/notif_footer_row"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="8dp"
-        android:textSize="12sp"
-        android:textColor="#9AA0A6"
-        android:textStyle="italic"
-        android:visibility="gone" />
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:visibility="gone">
 
-    <ImageView
-        android:id="@+id/notif_thumb"
+        <ImageView
+            android:id="@+id/notif_footer_head"
+            android:layout_width="16dp"
+            android:layout_height="16dp"
+            android:layout_marginEnd="6dp"
+            android:src="@drawable/ic_notification_head"
+            android:visibility="gone"
+            android:contentDescription="@null" />
+
+        <!-- Option B (2026-09-14): per-band figure counts lead the footer,
+             replacing the single head and the "N figs" count. -->
+        <LinearLayout
+            android:id="@+id/notif_footer_bands"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="4dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:visibility="gone">
+            <ImageView android:id="@+id/notif_fb0_h" android:layout_width="13dp" android:layout_height="13dp"
+                android:layout_marginEnd="2dp" android:src="@drawable/ic_notification_head" android:visibility="gone" android:contentDescription="@null" />
+            <TextView android:id="@+id/notif_fb0_n" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:layout_marginEnd="7dp" android:textSize="12sp" android:textStyle="bold" android:textColor="#D7D9DD"
+                android:singleLine="true" android:includeFontPadding="false" android:visibility="gone" />
+            <ImageView android:id="@+id/notif_fb1_h" android:layout_width="13dp" android:layout_height="13dp"
+                android:layout_marginEnd="2dp" android:src="@drawable/ic_notification_head" android:visibility="gone" android:contentDescription="@null" />
+            <TextView android:id="@+id/notif_fb1_n" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:layout_marginEnd="7dp" android:textSize="12sp" android:textStyle="bold" android:textColor="#D7D9DD"
+                android:singleLine="true" android:includeFontPadding="false" android:visibility="gone" />
+            <ImageView android:id="@+id/notif_fb2_h" android:layout_width="13dp" android:layout_height="13dp"
+                android:layout_marginEnd="2dp" android:src="@drawable/ic_notification_head" android:visibility="gone" android:contentDescription="@null" />
+            <TextView android:id="@+id/notif_fb2_n" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:layout_marginEnd="7dp" android:textSize="12sp" android:textStyle="bold" android:textColor="#D7D9DD"
+                android:singleLine="true" android:includeFontPadding="false" android:visibility="gone" />
+            <ImageView android:id="@+id/notif_fb3_h" android:layout_width="13dp" android:layout_height="13dp"
+                android:layout_marginEnd="2dp" android:src="@drawable/ic_notification_head" android:visibility="gone" android:contentDescription="@null" />
+            <TextView android:id="@+id/notif_fb3_n" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:layout_marginEnd="7dp" android:textSize="12sp" android:textStyle="bold" android:textColor="#D7D9DD"
+                android:singleLine="true" android:includeFontPadding="false" android:visibility="gone" />
+            <ImageView android:id="@+id/notif_fb4_h" android:layout_width="13dp" android:layout_height="13dp"
+                android:layout_marginEnd="2dp" android:src="@drawable/ic_notification_head" android:visibility="gone" android:contentDescription="@null" />
+            <TextView android:id="@+id/notif_fb4_n" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:layout_marginEnd="7dp" android:textSize="12sp" android:textStyle="bold" android:textColor="#D7D9DD"
+                android:singleLine="true" android:includeFontPadding="false" android:visibility="gone" />
+            <ImageView android:id="@+id/notif_fb5_h" android:layout_width="13dp" android:layout_height="13dp"
+                android:layout_marginEnd="2dp" android:src="@drawable/ic_notification_head" android:visibility="gone" android:contentDescription="@null" />
+            <TextView android:id="@+id/notif_fb5_n" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:layout_marginEnd="7dp" android:textSize="12sp" android:textStyle="bold" android:textColor="#D7D9DD"
+                android:singleLine="true" android:includeFontPadding="false" android:visibility="gone" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/notif_footer"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="12sp"
+            android:textColor="#9AA0A6"
+            android:textStyle="italic" />
+    </LinearLayout>
+
+    <!-- 2026-09-09: IN-CARD info block (Mat: "the info card should look like
+         the one on the app"). Same facts as the dashboard info sheet, pre-
+         rendered by the Pi (`info_card`). Shown in place of the photo when
+         the face is tapped; the face at the block's top-right closes it.
+         The vision row opens the vision bottom sheet. RemoteViews allow no
+         TableLayout, so the table is weighted LinearLayout rows. -->
+    <LinearLayout
+        android:id="@+id/notif_info_block"
         android:layout_width="match_parent"
-        android:layout_height="160dp"
-        android:layout_marginTop="10dp"
-        android:scaleType="centerCrop"
-        android:adjustViewBounds="true"
-        android:contentDescription="@null" />
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+            <TextView
+                android:id="@+id/notif_info_head"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textSize="11sp"
+                android:textColor="#9AA0A6"
+                android:text="REFERENCE NOTES"
+                android:textStyle="bold"
+                android:letterSpacing="0.12" />
+            <ImageView
+                android:id="@+id/notif_info_close"
+                android:layout_width="26dp"
+                android:layout_height="26dp"
+                android:padding="4dp"
+                android:background="@drawable/bg_face_btn"
+                android:src="@drawable/ic_face_flat"
+                android:contentDescription="Close details" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/notif_info_set"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="13sp"
+            android:textColor="#4A9EFF"
+            android:layout_marginTop="4dp"
+            android:maxLines="2"
+            android:ellipsize="end" />
+
+        <TextView
+            android:id="@+id/notif_info_l1"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="13sp"
+            android:textColor="#F2B35A"
+            android:layout_marginTop="3dp"
+            android:maxLines="2" />
+
+        <TextView
+            android:id="@+id/notif_info_l2"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="13sp"
+            android:textColor="#9AA0A6"
+            android:layout_marginTop="3dp"
+            android:maxLines="2" />
+
+        <LinearLayout
+            android:id="@+id/notif_info_table"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="vertical"
+            android:visibility="gone">
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:paddingBottom="3dp">
+                <TextView
+                    android:id="@+id/notif_info_th0"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1.15"
+                    android:textSize="10sp"
+                    android:textColor="#6A6F75" />
+                <TextView
+                    android:id="@+id/notif_info_th1"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:textSize="10sp"
+                    android:textColor="#9AA0A6"
+                    android:gravity="end"
+                    android:textStyle="bold"
+                    android:singleLine="true" />
+                <TextView
+                    android:id="@+id/notif_info_th2"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:textSize="10sp"
+                    android:textColor="#9AA0A6"
+                    android:gravity="end"
+                    android:textStyle="bold"
+                    android:singleLine="true" />
+            </LinearLayout>
+            <LinearLayout
+                android:id="@+id/notif_info_r0"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:paddingTop="3dp"
+                android:paddingBottom="3dp">
+                <TextView
+                    android:id="@+id/notif_info_r0_l"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1.15"
+                    android:textSize="12sp"
+                    android:textColor="#9AA0A6"
+                    android:singleLine="true" />
+                <TextView
+                    android:id="@+id/notif_info_r0_a"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:textSize="12sp"
+                    android:textColor="#F2F2F2"
+                    android:gravity="end"
+                    android:singleLine="true" />
+                <TextView
+                    android:id="@+id/notif_info_r0_b"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:textSize="12sp"
+                    android:textColor="#F2F2F2"
+                    android:gravity="end"
+                    android:singleLine="true" />
+            </LinearLayout>
+            <LinearLayout
+                android:id="@+id/notif_info_r1"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:paddingTop="3dp"
+                android:paddingBottom="3dp">
+                <TextView
+                    android:id="@+id/notif_info_r1_l"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1.15"
+                    android:textSize="12sp"
+                    android:textColor="#9AA0A6"
+                    android:singleLine="true" />
+                <TextView
+                    android:id="@+id/notif_info_r1_a"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:textSize="12sp"
+                    android:textColor="#F2F2F2"
+                    android:gravity="end"
+                    android:singleLine="true" />
+                <TextView
+                    android:id="@+id/notif_info_r1_b"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:textSize="12sp"
+                    android:textColor="#F2F2F2"
+                    android:gravity="end"
+                    android:singleLine="true" />
+            </LinearLayout>
+            <LinearLayout
+                android:id="@+id/notif_info_r2"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:paddingTop="3dp"
+                android:paddingBottom="3dp">
+                <TextView
+                    android:id="@+id/notif_info_r2_l"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1.15"
+                    android:textSize="12sp"
+                    android:textColor="#9AA0A6"
+                    android:singleLine="true" />
+                <TextView
+                    android:id="@+id/notif_info_r2_a"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:textSize="12sp"
+                    android:textColor="#F2F2F2"
+                    android:gravity="end"
+                    android:singleLine="true" />
+                <TextView
+                    android:id="@+id/notif_info_r2_b"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:textSize="12sp"
+                    android:textColor="#F2F2F2"
+                    android:gravity="end"
+                    android:singleLine="true" />
+            </LinearLayout>
+            <LinearLayout
+                android:id="@+id/notif_info_r3"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:paddingTop="3dp"
+                android:paddingBottom="3dp">
+                <TextView
+                    android:id="@+id/notif_info_r3_l"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1.15"
+                    android:textSize="12sp"
+                    android:textColor="#9AA0A6"
+                    android:singleLine="true" />
+                <TextView
+                    android:id="@+id/notif_info_r3_a"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:textSize="12sp"
+                    android:textColor="#F2F2F2"
+                    android:gravity="end"
+                    android:singleLine="true" />
+                <TextView
+                    android:id="@+id/notif_info_r3_b"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:textSize="12sp"
+                    android:textColor="#F2F2F2"
+                    android:gravity="end"
+                    android:singleLine="true" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/notif_info_figs_line"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="13sp"
+            android:textColor="#F2F2F2"
+            android:layout_marginTop="8dp" />
+
+        <LinearLayout
+            android:id="@+id/notif_info_f0"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingTop="3dp"
+            android:visibility="gone">
+            <TextView
+                android:id="@+id/notif_info_f0_num"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="12sp"
+                android:textColor="#4A9EFF"
+                android:minWidth="66dp" />
+            <TextView
+                android:id="@+id/notif_info_f0_name"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textSize="12sp"
+                android:textColor="#F2F2F2"
+                android:maxLines="2"
+                android:ellipsize="end"
+                android:layout_marginStart="6dp" />
+            <TextView
+                android:id="@+id/notif_info_f0_val"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="12sp"
+                android:textColor="#F2F2F2"
+                android:gravity="end"
+                android:minWidth="40dp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/notif_info_f1"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingTop="3dp"
+            android:visibility="gone">
+            <TextView
+                android:id="@+id/notif_info_f1_num"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="12sp"
+                android:textColor="#4A9EFF"
+                android:minWidth="66dp" />
+            <TextView
+                android:id="@+id/notif_info_f1_name"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textSize="12sp"
+                android:textColor="#F2F2F2"
+                android:maxLines="2"
+                android:ellipsize="end"
+                android:layout_marginStart="6dp" />
+            <TextView
+                android:id="@+id/notif_info_f1_val"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="12sp"
+                android:textColor="#F2F2F2"
+                android:gravity="end"
+                android:minWidth="40dp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/notif_info_f2"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingTop="3dp"
+            android:visibility="gone">
+            <TextView
+                android:id="@+id/notif_info_f2_num"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="12sp"
+                android:textColor="#4A9EFF"
+                android:minWidth="66dp" />
+            <TextView
+                android:id="@+id/notif_info_f2_name"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textSize="12sp"
+                android:textColor="#F2F2F2"
+                android:maxLines="2"
+                android:ellipsize="end"
+                android:layout_marginStart="6dp" />
+            <TextView
+                android:id="@+id/notif_info_f2_val"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="12sp"
+                android:textColor="#F2F2F2"
+                android:gravity="end"
+                android:minWidth="40dp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/notif_info_f3"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingTop="3dp"
+            android:visibility="gone">
+            <TextView
+                android:id="@+id/notif_info_f3_num"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="12sp"
+                android:textColor="#4A9EFF"
+                android:minWidth="66dp" />
+            <TextView
+                android:id="@+id/notif_info_f3_name"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textSize="12sp"
+                android:textColor="#F2F2F2"
+                android:maxLines="2"
+                android:ellipsize="end"
+                android:layout_marginStart="6dp" />
+            <TextView
+                android:id="@+id/notif_info_f3_val"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="12sp"
+                android:textColor="#F2F2F2"
+                android:gravity="end"
+                android:minWidth="40dp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/notif_info_f4"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingTop="3dp"
+            android:visibility="gone">
+            <TextView
+                android:id="@+id/notif_info_f4_num"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="12sp"
+                android:textColor="#4A9EFF"
+                android:minWidth="66dp" />
+            <TextView
+                android:id="@+id/notif_info_f4_name"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textSize="12sp"
+                android:textColor="#F2F2F2"
+                android:maxLines="2"
+                android:ellipsize="end"
+                android:layout_marginStart="6dp" />
+            <TextView
+                android:id="@+id/notif_info_f4_val"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="12sp"
+                android:textColor="#F2F2F2"
+                android:gravity="end"
+                android:minWidth="40dp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/notif_info_vision"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="6dp"
+            android:gravity="center_vertical"
+            android:paddingTop="4dp"
+            android:paddingBottom="2dp">
+            <ImageView
+                android:id="@+id/notif_info_vision_icon"
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                android:layout_marginEnd="8dp"
+                android:src="@drawable/ic_act_scan"
+                android:contentDescription="@null" />
+            <TextView
+                android:id="@+id/notif_info_vision_txt"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textSize="13sp"
+                android:textColor="#E0A63A"
+                android:textStyle="bold"
+                android:singleLine="true"
+                android:ellipsize="end" />
+            <TextView
+                android:id="@+id/notif_info_vision_more"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="13sp"
+                android:textColor="#9AA0A6"
+                android:text="Vision ▸" />
+        </LinearLayout>
+
+    </LinearLayout>
+
+    <!-- 2026-09-08: photo wrapped so the info face can sit on its top-right
+         corner, exactly where it sits on the dashboard card. The photo
+         itself is a tap target (full-screen viewer); the face opens the
+         native info sheet. -->
+    <FrameLayout
+        android:id="@+id/notif_thumb_wrap"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp">
+
+        <ImageView
+            android:id="@+id/notif_thumb"
+            android:layout_width="match_parent"
+            android:layout_height="160dp"
+            android:scaleType="centerCrop"
+            android:contentDescription="@null" />
+
+        <!-- 2026-09-09: tap the photo and the card redraws with this taller
+             view instead (in place, the shade stays open); tap again to
+             shrink. -->
+        <ImageView
+            android:id="@+id/notif_thumb_big"
+            android:layout_width="match_parent"
+            android:layout_height="236dp"
+            android:scaleType="fitCenter"
+            android:visibility="gone"
+            android:contentDescription="@null" />
+
+        <ImageView
+            android:id="@+id/notif_face_btn"
+            android:layout_width="30dp"
+            android:layout_height="30dp"
+            android:layout_gravity="top|end"
+            android:layout_margin="8dp"
+            android:padding="5dp"
+            android:background="@drawable/bg_face_btn"
+            android:src="@drawable/ic_face_flat"
+            android:visibility="gone"
+            android:contentDescription="Listing details" />
+    </FrameLayout>
 
 </LinearLayout>
