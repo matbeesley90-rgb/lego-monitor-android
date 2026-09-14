@@ -11,8 +11,8 @@ android {
         applicationId "com.lego.monitor"
         minSdk 26
         targetSdk 34
-        versionCode 9
-        versionName "0.2.17"
+        versionCode 10
+        versionName "0.2.18"
     }
 
     buildTypes {

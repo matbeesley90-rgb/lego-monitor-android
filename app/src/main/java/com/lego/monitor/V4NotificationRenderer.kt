@@ -230,6 +230,7 @@ object V4NotificationRenderer {
                 expanded.setViewVisibility(R.id.notif_footer_row, View.GONE)
             }
         }
+        applyFigBands(p, collapsed, expanded, s)
 
         // ── 🎯 Grail (2026-09-08, Mat's design) ────────────────────────
         // The banner across the top turns violet — deliberately NOT a
@@ -662,7 +663,61 @@ object V4NotificationRenderer {
      * negative-red per `positive`; a wide gap between fig-count and average;
      * everything else muted grey. Colours track V4Style so a Settings tweak
      * propagates. */
-    private fun bundleFooterSpannable(b: BundleParts, s: V4Style): CharSequence {
+    private val CB_H = intArrayOf(R.id.notif_cb0_h, R.id.notif_cb1_h, R.id.notif_cb2_h, R.id.notif_cb3_h, R.id.notif_cb4_h, R.id.notif_cb5_h)
+    private val CB_N = intArrayOf(R.id.notif_cb0_n, R.id.notif_cb1_n, R.id.notif_cb2_n, R.id.notif_cb3_n, R.id.notif_cb4_n, R.id.notif_cb5_n)
+    private val FB_H = intArrayOf(R.id.notif_fb0_h, R.id.notif_fb1_h, R.id.notif_fb2_h, R.id.notif_fb3_h, R.id.notif_fb4_h, R.id.notif_fb5_h)
+    private val FB_N = intArrayOf(R.id.notif_fb0_n, R.id.notif_fb1_n, R.id.notif_fb2_n, R.id.notif_fb3_n, R.id.notif_fb4_n, R.id.notif_fb5_n)
+
+    /** One band slot: a head tinted to the band (or the outline head for
+     * figures nobody identified) and "×N". */
+    private fun fillBandSlot(rv: RemoteViews, headId: Int, textId: Int, band: FigBand?) {
+        if (band == null || band.n <= 0) {
+            rv.setViewVisibility(headId, View.GONE); rv.setViewVisibility(textId, View.GONE); return
+        }
+        if (band.color == "ghost") {
+            rv.setImageViewResource(headId, R.drawable.ic_head_outline)
+            rv.setInt(headId, "setColorFilter", Color.parseColor("#8B9096"))
+        } else {
+            rv.setImageViewResource(headId, R.drawable.ic_notification_head)
+            rv.setInt(headId, "setColorFilter",
+                try { Color.parseColor(band.color) } catch (_: Exception) { Color.parseColor("#8B9096") })
+        }
+        rv.setTextViewText(textId, "\u00D7${band.n}")
+        rv.setViewVisibility(headId, View.VISIBLE); rv.setViewVisibility(textId, View.VISIBLE)
+    }
+
+    /** Option B (Mat, 2026-09-14): figure bands, best first. Collapsed row:
+     * the bands that fit plus the white head with the whole lot, always at
+     * the far right; the title-row head goes. Expanded: the full band list
+     * leads the footer in place of the single head and the figs count. */
+    private fun applyFigBands(p: V4Payload, collapsed: RemoteViews, expanded: RemoteViews, s: V4Style) {
+        val fb = p.figBands
+        if (fb == null || fb.totalN <= 0) {
+            collapsed.setViewVisibility(R.id.notif_bands_row, View.GONE)
+            expanded.setViewVisibility(R.id.notif_footer_bands, View.GONE)
+            return
+        }
+        // collapsed
+        collapsed.setViewVisibility(R.id.notif_bands_row, View.VISIBLE)
+        collapsed.setViewVisibility(R.id.notif_fig_head, View.GONE)
+        for (i in CB_H.indices) fillBandSlot(collapsed, CB_H[i], CB_N[i], fb.bandsFit.getOrNull(i))
+        collapsed.setImageViewResource(R.id.notif_cb_tot_h, R.drawable.ic_notification_head)
+        collapsed.setInt(R.id.notif_cb_tot_h, "setColorFilter", Color.parseColor("#F2F2F2"))
+        collapsed.setTextViewText(R.id.notif_cb_tot_n,
+            if (fb.totalGbp != null) "\u00D7${fb.totalN} = \u00A3${fb.totalGbp}" else "\u00D7${fb.totalN} counted")
+        collapsed.setViewVisibility(R.id.notif_cb_tot_h, View.VISIBLE)
+        collapsed.setViewVisibility(R.id.notif_cb_tot_n, View.VISIBLE)
+        // expanded footer
+        expanded.setViewVisibility(R.id.notif_footer_row, View.VISIBLE)
+        expanded.setViewVisibility(R.id.notif_footer_head, View.GONE)
+        expanded.setViewVisibility(R.id.notif_footer_bands, View.VISIBLE)
+        for (i in FB_H.indices) fillBandSlot(expanded, FB_H[i], FB_N[i], fb.bands.getOrNull(i))
+        if (p.kind == "bundle" && p.bundleParts != null) {
+            expanded.setTextViewText(R.id.notif_footer, bundleFooterSpannable(p.bundleParts, s, compact = true))
+        }
+    }
+
+    private fun bundleFooterSpannable(b: BundleParts, s: V4Style, compact: Boolean = false): CharSequence {
         val grey  = Color.parseColor("#9AA0A6")
         val blue  = s.askingColor
         val money = if (b.positive) s.cellBN.pctPosColor else s.cellBN.pctNegColor
@@ -681,10 +736,12 @@ object V4NotificationRenderer {
         }
 
         run(b.total, blue, true)                 // £142  (blue, bold)
-        run(" • ", grey)
-        run(b.figs, grey)                        // 26 figs
-        run("   ", grey)                         // the requested gap
-        run(b.avg, grey)                         // x̄£5.5
+        if (!compact) {                          // bands already carry the counts
+            run(" • ", grey)
+            run(b.figs, grey)                    // 26 figs
+            run("   ", grey)                     // the requested gap
+            run(b.avg, grey)                     // x̄£5.5
+        }
         run(" • ", grey)
         run("${b.pct} • ${b.profit}", money, true)   // +103% • £72 (green/red)
         if (b.auction.isNotBlank()) {

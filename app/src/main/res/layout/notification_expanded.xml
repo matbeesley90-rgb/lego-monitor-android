@@ -266,6 +266,48 @@
             android:visibility="gone"
             android:contentDescription="@null" />
 
+        <!-- Option B (2026-09-14): per-band figure counts lead the footer,
+             replacing the single head and the "N figs" count. -->
+        <LinearLayout
+            android:id="@+id/notif_footer_bands"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="4dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:visibility="gone">
+            <ImageView android:id="@+id/notif_fb0_h" android:layout_width="13dp" android:layout_height="13dp"
+                android:layout_marginEnd="2dp" android:src="@drawable/ic_notification_head" android:visibility="gone" android:contentDescription="@null" />
+            <TextView android:id="@+id/notif_fb0_n" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:layout_marginEnd="7dp" android:textSize="12sp" android:textStyle="bold" android:textColor="#D7D9DD"
+                android:singleLine="true" android:includeFontPadding="false" android:visibility="gone" />
+            <ImageView android:id="@+id/notif_fb1_h" android:layout_width="13dp" android:layout_height="13dp"
+                android:layout_marginEnd="2dp" android:src="@drawable/ic_notification_head" android:visibility="gone" android:contentDescription="@null" />
+            <TextView android:id="@+id/notif_fb1_n" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:layout_marginEnd="7dp" android:textSize="12sp" android:textStyle="bold" android:textColor="#D7D9DD"
+                android:singleLine="true" android:includeFontPadding="false" android:visibility="gone" />
+            <ImageView android:id="@+id/notif_fb2_h" android:layout_width="13dp" android:layout_height="13dp"
+                android:layout_marginEnd="2dp" android:src="@drawable/ic_notification_head" android:visibility="gone" android:contentDescription="@null" />
+            <TextView android:id="@+id/notif_fb2_n" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:layout_marginEnd="7dp" android:textSize="12sp" android:textStyle="bold" android:textColor="#D7D9DD"
+                android:singleLine="true" android:includeFontPadding="false" android:visibility="gone" />
+            <ImageView android:id="@+id/notif_fb3_h" android:layout_width="13dp" android:layout_height="13dp"
+                android:layout_marginEnd="2dp" android:src="@drawable/ic_notification_head" android:visibility="gone" android:contentDescription="@null" />
+            <TextView android:id="@+id/notif_fb3_n" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:layout_marginEnd="7dp" android:textSize="12sp" android:textStyle="bold" android:textColor="#D7D9DD"
+                android:singleLine="true" android:includeFontPadding="false" android:visibility="gone" />
+            <ImageView android:id="@+id/notif_fb4_h" android:layout_width="13dp" android:layout_height="13dp"
+                android:layout_marginEnd="2dp" android:src="@drawable/ic_notification_head" android:visibility="gone" android:contentDescription="@null" />
+            <TextView android:id="@+id/notif_fb4_n" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:layout_marginEnd="7dp" android:textSize="12sp" android:textStyle="bold" android:textColor="#D7D9DD"
+                android:singleLine="true" android:includeFontPadding="false" android:visibility="gone" />
+            <ImageView android:id="@+id/notif_fb5_h" android:layout_width="13dp" android:layout_height="13dp"
+                android:layout_marginEnd="2dp" android:src="@drawable/ic_notification_head" android:visibility="gone" android:contentDescription="@null" />
+            <TextView android:id="@+id/notif_fb5_n" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:layout_marginEnd="7dp" android:textSize="12sp" android:textStyle="bold" android:textColor="#D7D9DD"
+                android:singleLine="true" android:includeFontPadding="false" android:visibility="gone" />
+        </LinearLayout>
+
         <TextView
             android:id="@+id/notif_footer"
             android:layout_width="wrap_content"

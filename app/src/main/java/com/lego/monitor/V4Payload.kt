@@ -63,6 +63,9 @@ data class V4Payload(
     // and the collapsed row's profit text ("🔥 +369%", "+85%", "checking…").
     val band: String = "",
     val bundleTail: String = "",
+    // Option B (2026-09-14): per-band figure counts. bands = all, bandsFit =
+    // the ones that fit the collapsed row, total = whole lot (n, gbp, counted).
+    val figBands: FigBands? = null,
 
     // Bundles only — per-token version of bundleLine so the renderer can
     // colour total (blue), profit (green/red), rest (grey). Null → render
@@ -140,6 +143,7 @@ data class V4Payload(
                     redAlert     = o.optBoolean("red_alert", false),
                     band         = o.optString("band", ""),
                     bundleTail   = o.optString("bundle_tail", ""),
+                    figBands     = FigBands.parse(o.optJSONObject("fig_bands")),
                     bundleParts  = BundleParts.parse(o.optJSONObject("bundle_parts")),
                     replaceKey   = o.optString("replace_key", ""),
                     isUpdate     = o.optBoolean("update", false),
@@ -348,6 +352,32 @@ data class FooterParts(
             // block as absent — caller falls back to the flat text.
             if (figSum.isBlank() || pct.isBlank() || profit.isBlank()) return null
             return FooterParts(icon, figSum, pct, profit, word)
+        }
+    }
+}
+
+/** One band of figures on the card: colour (hex, or "ghost" for
+ * unidentified) and how many. */
+data class FigBand(val color: String, val n: Int)
+
+data class FigBands(val bands: List<FigBand>, val bandsFit: List<FigBand>,
+                    val totalN: Int, val totalGbp: Int?, val counted: Boolean) {
+    companion object {
+        fun parse(o: org.json.JSONObject?): FigBands? {
+            if (o == null) return null
+            fun list(a: org.json.JSONArray?): List<FigBand> {
+                val out = ArrayList<FigBand>()
+                if (a == null) return out
+                for (i in 0 until a.length()) {
+                    val b = a.optJSONObject(i) ?: continue
+                    out.add(FigBand(b.optString("color", ""), b.optInt("n", 0)))
+                }
+                return out
+            }
+            val t = o.optJSONObject("total")
+            val gbp = if (t != null && !t.isNull("gbp")) t.optInt("gbp") else null
+            return FigBands(list(o.optJSONArray("bands")), list(o.optJSONArray("bands_fit")),
+                            t?.optInt("n") ?: 0, gbp, t?.optBoolean("counted") ?: false)
         }
     }
 }
