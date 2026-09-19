@@ -15,5 +15,16 @@
     <domain-config cleartextTrafficPermitted="true">
         <!-- Pi over Tailscale — the Flask dashboard -->
         <domain includeSubdomains="false">100.66.72.71</domain>
+        <!-- 2026-09-18: the same Pi by its Tailscale MagicDNS name, so a
+             dashboard link on http://lego-monitor:5000 also loads in the
+             WebView (MainActivity.isPiHost treats it as the Pi). -->
+        <domain includeSubdomains="true">lego-monitor</domain>
+        <!-- 2026-09-19 re-review: "includeSubdomains" on "lego-monitor"
+             covers *.lego-monitor, NOT the MagicDNS FQDN (a subdomain of
+             ts.net) or the mDNS name — both of which isPiHost keeps in
+             the WebView. List them concretely so those links don't die
+             with ERR_CLEARTEXT_NOT_PERMITTED. -->
+        <domain includeSubdomains="false">lego-monitor.tail56cba5.ts.net</domain>
+        <domain includeSubdomains="false">lego-monitor.local</domain>
     </domain-config>
 </network-security-config>

@@ -100,6 +100,23 @@
             android:adjustViewBounds="true"
             android:contentDescription="@null" />
 
+        <!-- 2026-09-18: live auction countdown. Chronometer is on the
+             RemoteViews whitelist and ticks inside SystemUI; the renderer
+             sets base = end_iso and a "• 🔨 %s" format so it reads
+             "• 🔨 17:32" ahead of the price. GONE unless the end parses
+             (then the static "🔨 Nm" in notif_title_tail is used). -->
+        <Chronometer
+            android:id="@+id/notif_timer"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:textColor="#F5AF02"
+            android:singleLine="true"
+            android:includeFontPadding="false"
+            android:visibility="gone" />
+
         <TextView
             android:id="@+id/notif_title_tail"
             android:layout_width="wrap_content"
@@ -181,7 +198,11 @@
             <TextView android:id="@+id/notif_cb5_n" android:layout_width="wrap_content" android:layout_height="wrap_content"
                 android:layout_marginEnd="6dp" android:textSize="11sp" android:textStyle="bold" android:textColor="#D7D9DD"
                 android:singleLine="true" android:includeFontPadding="false" android:visibility="gone" />
-            <View android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1" />
+            <!-- Spacer pushing the white total to the far right. A TextView,
+                 NOT a bare View: android.view.View is not on the RemoteViews
+                 whitelist and a failed inflate drops the WHOLE card
+                 (2026-09-18 audit S1 — the same bug c6c359a removed). -->
+            <TextView android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1" />
             <ImageView android:id="@+id/notif_cb_tot_h" android:layout_width="12dp" android:layout_height="12dp"
                 android:layout_marginEnd="2dp" android:src="@drawable/ic_notification_head" android:visibility="gone" android:contentDescription="@null" />
             <TextView android:id="@+id/notif_cb_tot_n" android:layout_width="wrap_content" android:layout_height="wrap_content"

@@ -15,6 +15,13 @@ import org.json.JSONObject
  */
 class CardActionReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, intent: Intent) {
+        // 2026-09-19 re-review: user dismissal (deleteIntent) — bump the
+        // card's generation so an in-flight image download cannot re-post
+        // the card the user just swiped/tapped away.
+        if (intent.action == ACTION_DISMISSED) {
+            V4NotificationRenderer.noteDismissed(intent.getIntExtra(EXTRA_NOTIF_ID, 0))
+            return
+        }
         if (intent.action != ACTION_REDRAW) return
         val frameJson = intent.getStringExtra(EXTRA_FRAME) ?: return
         val frame = try { JSONObject(frameJson) } catch (_: Exception) { return }
@@ -30,6 +37,8 @@ class CardActionReceiver : BroadcastReceiver() {
 
     companion object {
         const val ACTION_REDRAW = "com.lego.monitor.REDRAW_CARD"
+        const val ACTION_DISMISSED = "com.lego.monitor.CARD_DISMISSED"
+        const val EXTRA_NOTIF_ID = "notif_id"
         const val EXTRA_FRAME = "frame"
         const val EXTRA_PHOTO_BIG = "photo_big"
         const val EXTRA_INFO_OPEN = "info_open"

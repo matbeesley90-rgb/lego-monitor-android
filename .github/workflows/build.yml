@@ -2,7 +2,9 @@ name: Build debug APK
 
 on:
   push:
-    branches: [main]
+    # 2026-09-18: all app work lives on claude/price-in-title (54 commits
+    # ahead of main, never CI-built) — build it on push too.
+    branches: [main, claude/price-in-title]
   workflow_dispatch:
 
 jobs:
@@ -23,11 +25,32 @@ jobs:
         with:
           packages: 'platforms;android-34 build-tools;34.0.0 platform-tools'
 
-      # Persist ONE debug keystore across builds so every APK is signed
-      # with the same key — otherwise Gradle generates a fresh throwaway
-      # key each run and Android refuses to update the installed app
-      # ("App not installed"). Fixed cache key = generate once, reuse forever.
-      - name: Cache debug keystore (stable signing)
+      # Stable signing key. Preferred source (2026-09-18): the Pi's
+      # permanent debug keystore as a base64 repo secret
+      # (ANDROID_DEBUG_KEYSTORE_B64 = ~/.lego-monitor-signing/debug.keystore.b64).
+      # The actions/cache path below is only a fallback while the secret
+      # is absent: a fixed cache key never updates and is evicted after
+      # 7 days unused, and every eviction silently minted a fresh key —
+      # the "CI signs with a new key every build" failure. Until the
+      # secret is confirmed working, ~/.lego-monitor-signing/resign.sh
+      # on the downloaded APK stays mandatory.
+      - name: Restore debug keystore from secret
+        id: ks
+        env:
+          KS_B64: ${{ secrets.ANDROID_DEBUG_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$KS_B64" ]; then
+            mkdir -p ~/.android
+            printf '%s' "$KS_B64" | base64 -d > ~/.android/debug.keystore
+            echo "from_secret=1" >> "$GITHUB_OUTPUT"
+            echo "keystore: restored from secret"
+          else
+            echo "from_secret=0" >> "$GITHUB_OUTPUT"
+            echo "keystore: secret not set — falling back to the cache"
+          fi
+
+      - name: Cache debug keystore (fallback when no secret)
+        if: steps.ks.outputs.from_secret != '1'
         uses: actions/cache@v4
         with:
           path: ~/.android/debug.keystore

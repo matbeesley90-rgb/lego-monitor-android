@@ -9,6 +9,7 @@ import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.net.Uri
 import android.os.Build
+import android.os.SystemClock
 import android.text.SpannableStringBuilder
 import android.text.Spanned
 import android.text.style.ForegroundColorSpan
@@ -20,6 +21,7 @@ import android.view.View
 import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
 import java.net.URL
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import kotlin.math.roundToInt
 
@@ -44,7 +46,17 @@ object V4NotificationRenderer {
     // Deep red: strong against both One UI's warm notification shade and
     // a dark background, while leaving white body text readable.
     private const val RED_ALERT_BG = "#8B0000"
-    private val imageThread = Executors.newSingleThreadExecutor()
+    // Bundles on their own channel (2026-09-18 audit S4) so 📦 pushes can be
+    // muted in Android settings independently of set deals. New id on
+    // purpose: the legacy "lego_monitor_bundles" channel was created at
+    // IMPORTANCE_DEFAULT by the plain-text path for a topic split that never
+    // went live, and Android restores a deleted channel's old settings if
+    // the same id is recreated — bundles must keep heads-up like deals.
+    private const val BUNDLE_CHANNEL_ID = "lego_monitor_bundles_v2"
+    private const val LEGACY_BUNDLE_CHANNEL_ID = "lego_monitor_bundles"
+    // 2026-09-18 audit S3: two download threads so one slow CDN fetch (up
+    // to 15 s) no longer holds every later card's photo behind it.
+    private val imageExecutor = Executors.newFixedThreadPool(2)
 
     /** In-place card modes (2026-09-09): a tap on the photo or the info
      *  face re-posts the SAME notification with the card redrawn, so the
@@ -54,17 +66,51 @@ object V4NotificationRenderer {
     data class CardMode(val photoBig: Boolean = false, val infoOpen: Boolean = false,
                         val infoPage: Int = 0)
 
-    // Decoded thumbnails by URL so an in-place redraw is instant (no
-    // placeholder flash). Tiny LRU: a handful of live cards at most.
-    private val bitmapCache = object : LinkedHashMap<String, android.graphics.Bitmap>(8, 0.75f, true) {
-        override fun removeEldestEntry(
-            eldest: MutableMap.MutableEntry<String, android.graphics.Bitmap>?
-        ): Boolean = size > 6
+    // 2026-09-18 audit S1: per-notifId generation. show() and cancel both
+    // bump it; the image task captures it and re-posts only while it is
+    // unchanged. A download finishing after a cancel (median 12 s between
+    // a flash and its withdrawal, 44/75 under 15 s — the push-first-verify
+    // design makes this the normal case) can no longer resurrect a
+    // withdrawn card and re-buzz, and one finishing after an update can no
+    // longer revert the card to the stale ⚡ content.
+    private val generation = ConcurrentHashMap<Int, Long>()
+    private fun bumpGeneration(notifId: Int): Long =
+        generation.merge(notifId, 1L) { a, b -> a + b } ?: 1L
+
+    /** 2026-09-19 re-review: a USER dismissal (swipe, or the body-tap
+     *  auto-cancel this commit introduced) never went through show()/
+     *  cancel, so it did not move the generation — an image download
+     *  still in flight (up to ~15 s) then re-posted the card the user
+     *  had just dismissed. The deleteIntent on every post lands here. */
+    fun noteDismissed(notifId: Int) {
+        if (notifId == 0) return
+        val gen = bumpGeneration(notifId)
+        Log.d(TAG, "V4 dismissed by user: notifId=$notifId gen→$gen")
     }
 
+    // Decoded thumbnails keyed by replace_key (the image URL for frames
+    // without one) so an in-place redraw is instant, no placeholder flash.
+    // The URL is kept alongside so a later push with a different photo is
+    // a miss. 24 entries (2026-09-18: was 6 keyed by URL — with ~500
+    // pushes/day a redraw of any card older than the last six re-downloaded
+    // its photo and re-opened the S1 race window).
+    private class CachedImage(val url: String, val bmp: android.graphics.Bitmap)
+    private val bitmapCache = object : LinkedHashMap<String, CachedImage>(32, 0.75f, true) {
+        override fun removeEldestEntry(
+            eldest: MutableMap.MutableEntry<String, CachedImage>?
+        ): Boolean = size > 24
+    }
+    private fun cacheKey(p: V4Payload): String = p.replaceKey.ifBlank { p.imageUrl }
+    private fun cachedBitmap(p: V4Payload): android.graphics.Bitmap? =
+        synchronized(bitmapCache) {
+            bitmapCache[cacheKey(p)]?.takeIf { it.url == p.imageUrl }?.bmp
+        }
+
+    /** [silent]: a replayed frame (WebSocketService `since=` catch-up) —
+     *  post without sound/vibration; the card still lands in the tray. */
     fun show(ctx: Context, frame: org.json.JSONObject, payload: V4Payload,
-             mode: CardMode = CardMode()) {
-        Log.d(TAG, "V4 show: brand=${payload.brand} kind=${payload.kind} pct=${payload.pct} setName='${payload.setName}' mode=$mode")
+             mode: CardMode = CardMode(), silent: Boolean = false) {
+        Log.d(TAG, "V4 show: brand=${payload.brand} kind=${payload.kind} pct=${payload.pct} setName='${payload.setName}' mode=$mode silent=$silent")
         try {
             ensureChannel(ctx)
             val msgId  = frame.optString("id")
@@ -74,13 +120,19 @@ object V4NotificationRenderer {
             val notifId = if (payload.replaceKey.isNotBlank())
                 ("lm:" + payload.replaceKey).hashCode()
             else msgId.hashCode()
+            // Every show() and every cancel moves the generation on; an
+            // image download still in flight for this id is then stale.
+            val gen = bumpGeneration(notifId)
 
             // Server retraction — the verified verdict says the earlier
-            // flash card was junk: remove it and render nothing.
+            // flash card was junk: remove it and render nothing. The
+            // generation bump above is what stops a pending image post
+            // from bringing it back.
             if (payload.isCancel) {
-                Log.d(TAG, "V4 cancel: removing notifId=$notifId")
+                Log.d(TAG, "V4 cancel: removing notifId=$notifId (gen=$gen)")
                 ctx.getSystemService(NotificationManager::class.java)
                     .cancel(notifId)
+                synchronized(bitmapCache) { bitmapCache.remove(cacheKey(payload)) }
                 return
             }
 
@@ -88,28 +140,46 @@ object V4NotificationRenderer {
             // image is in cache (and our /img/proxy sets a Cache-Control:
             // public,max-age=86400), it lands almost instantly. Image
             // download happens off-thread; once it finishes we re-post the
-            // same notifId with the bitmap filled in.
+            // same notifId with the bitmap filled in — unless the
+            // generation moved meanwhile.
             val frameJson = frame.toString()
-            val cached = synchronized(bitmapCache) { bitmapCache[payload.imageUrl] }
-            Log.d(TAG, "V4 posting notifId=$notifId cachedBitmap=${cached != null}")
-            post(ctx, notifId, payload, cached, frameJson, mode)
+            val cached = cachedBitmap(payload)
+            Log.d(TAG, "V4 posting notifId=$notifId gen=$gen cachedBitmap=${cached != null}")
+            post(ctx, notifId, payload, cached, frameJson, mode, silent)
 
             if (cached == null && payload.imageUrl.isNotBlank()) {
-                imageThread.execute {
+                imageExecutor.execute {
                     try {
-                        Log.d(TAG, "V4 fetching image: ${payload.imageUrl}")
-                        val conn = URL(payload.imageUrl).openConnection()
-                        conn.connectTimeout = 5000
-                        conn.readTimeout = 10000
-                        conn.getInputStream().use { stream ->
-                            val bmp = BitmapFactory.decodeStream(stream)
-                            if (bmp != null) {
-                                Log.d(TAG, "V4 image decoded ${bmp.width}x${bmp.height}, re-posting")
-                                synchronized(bitmapCache) { bitmapCache[payload.imageUrl] = bmp }
-                                post(ctx, notifId, payload, bmp, frameJson, mode)
-                            } else {
-                                Log.w(TAG, "V4 image decode returned null")
+                        if (generation[notifId] != gen) {
+                            Log.d(TAG, "V4 image task stale before fetch (notifId=$notifId), skipping")
+                            return@execute
+                        }
+                        // A redraw racing an in-flight download of the same
+                        // card: reuse what just landed in the cache.
+                        val bmp = cachedBitmap(payload) ?: run {
+                            Log.d(TAG, "V4 fetching image: ${payload.imageUrl}")
+                            val conn = URL(payload.imageUrl).openConnection()
+                            conn.connectTimeout = 5000
+                            conn.readTimeout = 10000
+                            conn.getInputStream().use { stream ->
+                                BitmapFactory.decodeStream(stream)
                             }
+                        }
+                        if (bmp == null) {
+                            Log.w(TAG, "V4 image decode returned null")
+                            return@execute
+                        }
+                        synchronized(bitmapCache) {
+                            bitmapCache[cacheKey(payload)] = CachedImage(payload.imageUrl, bmp)
+                        }
+                        // Re-post ONLY if nothing (cancel / update / redraw)
+                        // has touched this id since we were queued. Never
+                        // re-post after a cancel.
+                        if (generation[notifId] == gen) {
+                            Log.d(TAG, "V4 image decoded ${bmp.width}x${bmp.height}, re-posting")
+                            post(ctx, notifId, payload, bmp, frameJson, mode, silent)
+                        } else {
+                            Log.d(TAG, "V4 image landed after gen moved (notifId=$notifId), not re-posting")
                         }
                     } catch (e: Exception) {
                         Log.w(TAG, "V4 image fetch failed", e)
@@ -124,7 +194,8 @@ object V4NotificationRenderer {
     private fun post(
         ctx: Context, notifId: Int, p: V4Payload,
         bmp: android.graphics.Bitmap?,
-        frameJson: String = "", mode: CardMode = CardMode()
+        frameJson: String = "", mode: CardMode = CardMode(),
+        silent: Boolean = false
     ) {
         val collapsed = RemoteViews(ctx.packageName, R.layout.notification_collapsed)
         val expanded  = RemoteViews(ctx.packageName, R.layout.notification_expanded)
@@ -141,9 +212,18 @@ object V4NotificationRenderer {
         collapsed.setViewVisibility(R.id.notif_brand_logo, View.VISIBLE)
         expanded.setViewVisibility(R.id.notif_brand_logo, View.VISIBLE)
 
-        val titleTail = brandTitleTailSpannable(p)
-        collapsed.setTextViewText(R.id.notif_title_tail, titleTail)
-        expanded.setTextViewText(R.id.notif_title_tail, titleTail)
+        // Option B (2026-09-14): with figure bands on the collapsed row the
+        // white total head IS the head, so the collapsed title tail drops
+        // its trailing " •" (the expanded row keeps its head, as designed).
+        val bandsOnCollapsed = (p.figBands?.totalN ?: 0) > 0
+        // Live auction countdown (Chronometer) takes the hammer slot when
+        // end_iso parses; the spannable then omits the static "🔨 Nm".
+        val timerLive = countdownRemainingMs(p) != null
+        collapsed.setTextViewText(R.id.notif_title_tail,
+            brandTitleTailSpannable(p, dropHeadSep = bandsOnCollapsed, timerLive = timerLive))
+        expanded.setTextViewText(R.id.notif_title_tail,
+            brandTitleTailSpannable(p, dropHeadSep = false, timerLive = timerLive))
+        applyCountdown(p, collapsed, expanded)
 
         // Body header — seller's raw title (verbatim from the
         // marketplace). Collapsed heads-up shows the same string
@@ -252,7 +332,12 @@ object V4NotificationRenderer {
             collapsed.setViewVisibility(R.id.notif_collapsed_top_stripe, View.VISIBLE)
             collapsed.setInt(R.id.notif_collapsed_top_stripe,
                 "setBackgroundColor", violet)
-            collapsed.setViewVisibility(R.id.notif_collapsed_stripe, View.GONE)
+            // 2026-09-18 audit S5: an AMBER tier keeps its left stripe (the
+            // design says everything but the banner is untouched); only a
+            // non-amber card drops it.
+            if (tier?.name != "amber") {
+                collapsed.setViewVisibility(R.id.notif_collapsed_stripe, View.GONE)
+            }
             collapsed.setViewVisibility(R.id.notif_grail_tab, View.VISIBLE)
             if (grail.catalogueUrl.isNotBlank()) {
                 val pi = openInAppIntent(ctx, grail.catalogueUrl, "grail:" + p.listingId)
@@ -341,6 +426,8 @@ object V4NotificationRenderer {
         // proportionally.
         expanded.setTextViewTextSize(R.id.notif_title_tail,
             TypedValue.COMPLEX_UNIT_SP, s.titleBaseSp)
+        expanded.setTextViewTextSize(R.id.notif_timer,
+            TypedValue.COMPLEX_UNIT_SP, s.titleBaseSp)
         expanded.setTextViewTextSize(R.id.notif_setname,
             TypedValue.COMPLEX_UNIT_SP, s.setNameSp)
         expanded.setTextViewTextSize(R.id.notif_r1_price,
@@ -377,8 +464,10 @@ object V4NotificationRenderer {
         // Top padding on row 2's container creates the vertical gap.
         expanded.setViewPadding(R.id.notif_row2, 0, rowGapPx, 0, 0)
 
-        // Collapsed gets the same title scale.
+        // Collapsed gets the same title scale (timer view included).
         collapsed.setTextViewTextSize(R.id.notif_title_tail,
+            TypedValue.COMPLEX_UNIT_SP, s.titleBaseSp)
+        collapsed.setTextViewTextSize(R.id.notif_timer,
             TypedValue.COMPLEX_UNIT_SP, s.titleBaseSp)
 
         fillGridRow(expanded, p, top = true)
@@ -421,6 +510,13 @@ object V4NotificationRenderer {
             // top fig's value band when there is one.
             for (rv in listOf(collapsed, expanded)) {
                 rv.setViewVisibility(R.id.notif_bundle_bricks, View.GONE)
+                // Option B: the collapsed row's band heads + white total
+                // replace the title-row head (applyFigBands hid it; this
+                // block used to re-show it — 2026-09-18 audit S2).
+                if (rv === collapsed && bandsOnCollapsed) {
+                    rv.setViewVisibility(R.id.notif_fig_head, View.GONE)
+                    continue
+                }
                 if (p.iconColor.isNotBlank()) {
                     try {
                         rv.setViewVisibility(R.id.notif_fig_head, View.VISIBLE)
@@ -438,6 +534,10 @@ object V4NotificationRenderer {
                 val band = Color.parseColor(p.iconColor)
                 for (rv in listOf(collapsed, expanded)) {
                     rv.setViewVisibility(R.id.notif_bundle_bricks, View.GONE)
+                    if (rv === collapsed && bandsOnCollapsed) {
+                        rv.setViewVisibility(R.id.notif_fig_head, View.GONE)   // Option B
+                        continue
+                    }
                     rv.setViewVisibility(R.id.notif_fig_head, View.VISIBLE)
                     rv.setInt(R.id.notif_fig_head, "setColorFilter", band)
                 }
@@ -489,8 +589,23 @@ object V4NotificationRenderer {
             }
         }
 
-        val builder = NotificationCompat.Builder(
-                ctx, if (p.redAlert) RED_CHANNEL_ID else CHANNEL_ID)
+        // Channel: red alerts first, then bundles on their own mutable
+        // channel (2026-09-18 audit S4), everything else on deal alerts.
+        val channel = when {
+            p.redAlert -> RED_CHANNEL_ID
+            p.kind == "bundle" -> BUNDLE_CHANNEL_ID
+            else -> CHANNEL_ID
+        }
+        // Content title: what the grouped/stacked tray, a watch and the
+        // channel settings show (the custom view overrides display).
+        // Bundles have no pct ("eBay • 0%" was every bundle — audit S5);
+        // the row's price + profit text is the useful summary.
+        val contentTitle = if (p.kind == "bundle") {
+            "${brandLabel(p.brand)} • £${p.asking.roundToInt()} • ${p.bundleTail.ifBlank { "bundle" }}"
+        } else {
+            "${brandLabel(p.brand)} • ${p.pct}%"
+        }
+        val builder = NotificationCompat.Builder(ctx, channel)
             .setSmallIcon(R.drawable.ic_notification_head)
             .setColor(if (p.redAlert) Color.parseColor(RED_ALERT_BG)
                       else accent)
@@ -499,34 +614,113 @@ object V4NotificationRenderer {
             // Same-ID re-posts (the bitmap fill-in, and in-place card
             // updates via replace_key) must not re-buzz.
             .setOnlyAlertOnce(true)
+            // User dismissal (swipe / body-tap auto-cancel) bumps the
+            // generation so an in-flight image download can't re-post the
+            // card the user just dismissed (2026-09-19 re-review).
+            .setDeleteIntent(dismissIntent(ctx, notifId))
             .setCustomContentView(collapsed)
             .setCustomBigContentView(expanded)
             .setStyle(NotificationCompat.DecoratedCustomViewStyle())
-            // Setting a content title so the channel summary in
-            // Settings stays useful; the custom view overrides display.
-            .setContentTitle("${brandLabel(p.brand)} • ${p.pct}%")
+            .setContentTitle(contentTitle)
 
         // Follow-up appraisal cards (server "update": true) are fully
         // silent even if the original was dismissed — the numbers just
-        // arrive; only genuinely new listings should make noise.
-        if (p.isUpdate) builder.setSilent(true)
+        // arrive; only genuinely new listings should make noise. Replayed
+        // frames (WebSocketService since= catch-up) are silent too.
+        if (p.isUpdate || silent) builder.setSilent(true)
 
-        addAction(ctx, builder, "Listing",   p.listingUrl,   p.kind, msgIdSuffix = "L")
-        addAction(ctx, builder, "Monitor",   p.monitorUrl,   p.kind, msgIdSuffix = "M")
+        // Body tap → the info sheet (2026-09-18 audit S5: there was no
+        // content intent, so a tap did nothing and setAutoCancel was
+        // inert). Without ids, the listing itself.
+        if (hasIds) {
+            builder.setContentIntent(infoSheetIntent(ctx, p))
+        } else if (p.listingUrl.isNotBlank()) {
+            builder.setContentIntent(listingIntent(ctx, p.listingUrl, "tap:" + p.listingUrl))
+        }
+
+        // Buttons (2026-09-18 audit S2): explicit intents only. Listing —
+        // the primary buy path — goes through MainActivity.openExternal
+        // (explicit-package launch into the marketplace app, browser by
+        // package as fallback; never the OS resolver, which My O2
+        // hijacks). Monitor / Catalogue open in the app's own WebView.
+        if (p.listingUrl.isNotBlank()) {
+            builder.addAction(0, "Listing",
+                listingIntent(ctx, p.listingUrl, "act:L:" + p.listingUrl))
+        }
+        if (p.monitorUrl.isNotBlank()) {
+            builder.addAction(0, "Monitor",
+                openInAppIntent(ctx, p.monitorUrl, "act:M:" + p.monitorUrl))
+        }
         // Third button: a set's catalogue page, or — for bundles, which
         // have no set page — VISION (Mat, 2026-09-09), opening the native
         // vision bottom sheet rather than the web fig-breakdown page.
         val wantsVision = p.kind == "bundle" || p.catalogueUrl.contains("/vision")
         if (wantsVision && p.listingId.isNotBlank() && p.apiBase.isNotBlank()) {
             builder.addAction(0, "Vision", visionSheetIntent(ctx, p))
-        } else if (wantsVision) {
-            addAction(ctx, builder, "Vision", p.catalogueUrl, p.kind, msgIdSuffix = "C")
-        } else {
-            addAction(ctx, builder, "Catalogue", p.catalogueUrl, p.kind, msgIdSuffix = "C")
+        } else if (p.catalogueUrl.isNotBlank()) {
+            builder.addAction(0, if (wantsVision) "Vision" else "Catalogue",
+                openInAppIntent(ctx, p.catalogueUrl, "act:C:" + p.catalogueUrl))
         }
 
         ctx.getSystemService(NotificationManager::class.java)
             .notify(notifId, builder.build())
+    }
+
+    // ── Auction countdown (2026-09-18 audit S2) ─────────────────────────
+    // "🔨 17m" was rendered once from mins_left and never ticked — a card
+    // glanced at 20 min later still said 17m. A Chronometer is on the
+    // RemoteViews whitelist and ticks inside SystemUI, so when end_iso
+    // parses (and is still ahead) the timer view takes the hammer slot at
+    // the head of the title row and counts down live; the static text is
+    // the fallback and never vanishes at 0 ("🔨 ending"). Past the end the
+    // Chronometer shows a negative time ("−00:30"), which reads as ended.
+
+    /** Milliseconds until the auction ends, or null when end_iso is
+     *  missing, unparseable or already past (→ static fallback). */
+    private fun countdownRemainingMs(p: V4Payload): Long? {
+        val endMs = parseEndIso(p.endIso) ?: return null
+        val remaining = endMs - System.currentTimeMillis()
+        return if (remaining > 0) remaining else null
+    }
+
+    private fun applyCountdown(p: V4Payload, collapsed: RemoteViews, expanded: RemoteViews) {
+        val remaining = countdownRemainingMs(p)
+        for (rv in listOf(collapsed, expanded)) {
+            if (remaining != null) {
+                // Chronometer base is in elapsedRealtime() terms; the
+                // format's %s becomes "17:32" (or "3:18:05" over an hour).
+                rv.setChronometerCountDown(R.id.notif_timer, true)
+                rv.setChronometer(R.id.notif_timer,
+                    SystemClock.elapsedRealtime() + remaining,
+                    "• 🔨 %s", true)
+                rv.setViewVisibility(R.id.notif_timer, View.VISIBLE)
+            } else {
+                rv.setViewVisibility(R.id.notif_timer, View.GONE)
+            }
+        }
+    }
+
+    /** end_iso is a Python `datetime.isoformat()` of a tz-aware time —
+     *  "2026-09-18T11:29:43+00:00" — occasionally with a 'Z', fractional
+     *  seconds, or (test data) no zone at all, which is taken as UTC.
+     *  Null when it does not parse. */
+    private fun parseEndIso(iso: String?): Long? {
+        val s = iso?.trim().orEmpty()
+        if (s.isEmpty()) return null
+        return try {
+            java.time.OffsetDateTime.parse(s).toInstant().toEpochMilli()
+        } catch (_: Exception) {
+            try {
+                java.time.Instant.parse(s).toEpochMilli()
+            } catch (_: Exception) {
+                try {
+                    java.time.LocalDateTime.parse(s.replace(' ', 'T'))
+                        .toInstant(java.time.ZoneOffset.UTC).toEpochMilli()
+                } catch (_: Exception) {
+                    null
+                }
+            }
+        }
     }
 
     /** Row text colour for the bundle profit, by band. On the red body the
@@ -553,17 +747,28 @@ object V4NotificationRenderer {
      * ImageView (brandDrawableFor) so it uses the actual SVG logo.
      * The percentage span is coloured green so it matches the V4
      * design ("green % next to ebay/vinted/facebook"). */
-    private fun brandTitleTailSpannable(p: V4Payload): CharSequence {
+    private fun brandTitleTailSpannable(
+        // Option B (2026-09-18 audit S2): with figure bands on the collapsed
+        // row the trailing " •" for the title-row head is dropped (the band
+        // heads + white total ARE the head there). [timerLive]: the
+        // Chronometer countdown is showing, so the static hammer text is
+        // omitted (the live timer owns that slot).
+        p: V4Payload, dropHeadSep: Boolean = false, timerLive: Boolean = false
+    ): CharSequence {
         val s = p.style
         val sb = SpannableStringBuilder()
         sb.append("• ")
         // AUCTION: the countdown leads the row, before the price (Mat,
         // 2026-09-11: "we still don't know it is an auction because it
         // cuts it off" — last on the row it was the first thing ellipsised).
+        // 2026-09-18 audit S2: at 0 minutes the hammer used to vanish
+        // entirely - an ending auction looked like a BIN. The static
+        // fallback now shows "ending" instead; skipped altogether while
+        // the live Chronometer is up.
         val mlFirst = p.minsLeft
-        if (mlFirst != null && mlFirst > 0) {
+        if (!timerLive && mlFirst != null && mlFirst >= 0) {
             val ts = sb.length
-            sb.append("\uD83D\uDD28 ${mlFirst}m")
+            sb.append(if (mlFirst > 0) "\uD83D\uDD28 ${mlFirst}m" else "\uD83D\uDD28 ending")
             sb.setSpan(ForegroundColorSpan(Color.parseColor("#F5AF02")),
                 ts, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
             sb.setSpan(StyleSpan(android.graphics.Typeface.BOLD),
@@ -596,7 +801,7 @@ object V4NotificationRenderer {
                 sb.setSpan(ForegroundColorSpan(bandTextColor(p)),
                     ts, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
             }
-            if (p.iconColor.isNotBlank()) sb.append(" •")
+            if (p.iconColor.isNotBlank() && !dropHeadSep) sb.append(" •")
             return sb
         }
         sb.append(" • ")
@@ -615,7 +820,7 @@ object V4NotificationRenderer {
         // by the same plain "•" separator as everything else —
         // "ebay • 70% • [head]" / "ebay • 70% • 5m • [head]". Only
         // appended when a band applies (head hidden otherwise).
-        if (p.iconColor.isNotBlank()) {
+        if (p.iconColor.isNotBlank() && !dropHeadSep) {
             sb.append(" •")
         }
         return sb
@@ -920,6 +1125,21 @@ object V4NotificationRenderer {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
     }
 
+    /** Fired by the system when the user dismisses the card (swipe, or
+     *  the auto-cancel body tap); bumps the generation via
+     *  CardActionReceiver so a pending image re-post goes stale. */
+    private fun dismissIntent(ctx: Context, notifId: Int): PendingIntent {
+        val i = Intent(ctx, CardActionReceiver::class.java).apply {
+            action = CardActionReceiver.ACTION_DISMISSED
+            putExtra(CardActionReceiver.EXTRA_NOTIF_ID, notifId)
+        }
+        // Request code = notifId: one dismiss intent per card; a different
+        // action string keeps it distinct from the redraw PendingIntents.
+        return PendingIntent.getBroadcast(
+            ctx, notifId, i,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+    }
+
     /** Broadcast that re-posts this card in a new mode (in place). */
     private fun redrawIntent(ctx: Context, p: V4Payload, frameJson: String,
                              mode: CardMode, what: String): PendingIntent {
@@ -954,12 +1174,6 @@ object V4NotificationRenderer {
     }
 
     private data class RowIds(val row: Int, val l: Int, val a: Int, val b: Int)
-    private val TABLE_ROWS = listOf(
-        RowIds(R.id.notif_info_r0, R.id.notif_info_r0_l, R.id.notif_info_r0_a, R.id.notif_info_r0_b),
-        RowIds(R.id.notif_info_r1, R.id.notif_info_r1_l, R.id.notif_info_r1_a, R.id.notif_info_r1_b),
-        RowIds(R.id.notif_info_r2, R.id.notif_info_r2_l, R.id.notif_info_r2_a, R.id.notif_info_r2_b),
-        RowIds(R.id.notif_info_r3, R.id.notif_info_r3_l, R.id.notif_info_r3_a, R.id.notif_info_r3_b),
-    )
     private val FIG_ROWS = listOf(
         RowIds(R.id.notif_info_f0, R.id.notif_info_f0_num, R.id.notif_info_f0_name, R.id.notif_info_f0_val),
         RowIds(R.id.notif_info_f1, R.id.notif_info_f1_num, R.id.notif_info_f1_name, R.id.notif_info_f1_val),
@@ -1003,56 +1217,19 @@ object V4NotificationRenderer {
         rv.setViewVisibility(R.id.notif_info_vision, View.GONE)
     }
 
-    private fun fillVisionRow(rv: RemoteViews, c: InfoCard) {
-        val ok = Color.parseColor("#4CC38A")
-        rv.setTextViewText(R.id.notif_info_vision_txt, c.visionLine.ifBlank { "Run vision" })
-        val vc = when (c.visionKind) {
-            "good" -> ok
-            "vis"  -> Color.parseColor("#F0A12A")
-            else   -> Color.parseColor("#E0A63A")
-        }
-        rv.setTextColor(R.id.notif_info_vision_txt, vc)
-        rv.setInt(R.id.notif_info_vision_icon, "setColorFilter", vc)
-    }
-
-    /** "£152 +74%" → value bold white, pct green (or red when negative). */
-    private fun cellSpannable(s: String): CharSequence {
-        val sp = s.indexOf(' ')
-        if (sp < 0) return s
-        val sb = SpannableStringBuilder(s)
-        sb.setSpan(StyleSpan(android.graphics.Typeface.BOLD), 0, sp,
-            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-        val neg = s.length > sp + 1 && s[sp + 1] == '-'
-        sb.setSpan(ForegroundColorSpan(Color.parseColor(if (neg) "#E06060" else "#4CC38A")),
-            sp + 1, s.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-        return sb
-    }
-
-    private fun photoIntent(ctx: Context, p: V4Payload): PendingIntent {
-        val i = Intent(ctx, PhotoViewerActivity::class.java).apply {
-            putExtra(PhotoViewerActivity.EXTRA_URL, p.photoUrl)
-            putExtra(PhotoViewerActivity.EXTRA_TITLE, p.sellerTitle.ifBlank { p.setName })
-            putExtra(PhotoViewerActivity.EXTRA_SUB,
-                "${brandLabel(p.brand)} · £${p.asking.roundToInt()}")
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
+    /** A marketplace URL → MainActivity.openExternal: explicit-package
+     *  launch into the eBay / Vinted / Facebook / Gumtree app, a browser
+     *  by package as fallback, the WebView as the last resort. The old
+     *  implicit ACTION_VIEW PendingIntent here let the OS resolver — i.e.
+     *  the My O2 hijacker — pick the handler for the primary buy button
+     *  (2026-09-18 audit S2). Same route the info sheet already used. */
+    private fun listingIntent(ctx: Context, url: String, key: String): PendingIntent {
+        val i = Intent(ctx, MainActivity::class.java)
+            .putExtra(MainActivity.EXTRA_OPEN_LISTING, url)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
         return PendingIntent.getActivity(
-            ctx, ("photo:" + p.listingId).hashCode(), i,
+            ctx, key.hashCode(), i,
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-    }
-
-    private fun addAction(
-        ctx: Context, b: NotificationCompat.Builder,
-        label: String, url: String, kind: String, msgIdSuffix: String
-    ) {
-        if (url.isBlank()) return
-        val pi = PendingIntent.getActivity(
-            ctx,
-            (kind + url + msgIdSuffix).hashCode(),
-            Intent(Intent.ACTION_VIEW, Uri.parse(url)),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
-        b.addAction(0, label, pi)
     }
 
     private fun ensureChannel(ctx: Context) {
@@ -1066,6 +1243,18 @@ object V4NotificationRenderer {
             enableVibration(true)
         }
         mgr.createNotificationChannel(ch)
+
+        // Bundles: own channel, same importance as deals (they still
+        // heads-up), so "mute bundles" is one toggle in Android settings.
+        // See BUNDLE_CHANNEL_ID for why the legacy id is retired.
+        mgr.createNotificationChannel(NotificationChannel(
+            BUNDLE_CHANNEL_ID, "Bundle alerts 📦",
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = "Job-lot / minifig-lot deal notifications"
+            enableVibration(true)
+        })
+        try { mgr.deleteNotificationChannel(LEGACY_BUNDLE_CHANNEL_ID) } catch (_: Exception) {}
 
         // SEPARATE CHANNEL for "drop everything" deals. Colour only helps
         // if you happen to be looking at the screen — a red notification

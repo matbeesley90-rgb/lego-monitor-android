@@ -146,7 +146,7 @@ class MainActivity : AppCompatActivity() {
                 val host = uri.host ?: ""
                 // The monitor UI itself (Pi host) stays in the WebView —
                 // internal pages, /vision, API-backed screens, etc.
-                if (host.contains(PI_HOST)) return false
+                if (isPiHost(host)) return false
                 // Anything else is a marketplace link the user tapped —
                 // hand it to the matching native app (Vinted / eBay /
                 // Facebook / Gumtree), falling back to a browser.
@@ -338,6 +338,18 @@ class MainActivity : AppCompatActivity() {
         false
     }
 
+    /** The Pi by its Tailscale IP or one of its names — 2026-09-18 audit
+     *  S5: if monitor_public_url ever moves to MagicDNS, dashboard links
+     *  must not be shoved into Chrome as "external". 2026-09-19 re-review:
+     *  exact matches only, mirroring network_security_config.xml — the old
+     *  startsWith("lego-monitor.") kept e.g. the ts.net FQDN in the
+     *  WebView while the cleartext whitelist did NOT cover it, so the
+     *  page died with ERR_CLEARTEXT_NOT_PERMITTED. */
+    private fun isPiHost(host: String): Boolean {
+        val h = host.lowercase()
+        return h == PI_HOST || h == PI_HOST_DNS || h == PI_HOST_FQDN || h == PI_HOST_MDNS
+    }
+
     private fun firstInstalled(pkgs: List<String>): String? =
         pkgs.firstOrNull { isInstalled(it) }
 
@@ -402,6 +414,13 @@ class MainActivity : AppCompatActivity() {
         // This address also works at home — Tailscale routes directly
         // over the LAN when both devices are on it.
         private const val PI_HOST = "100.66.72.71"
+        // Tailscale MagicDNS name of the same machine (see isPiHost).
+        private const val PI_HOST_DNS = "lego-monitor"
+        // 2026-09-19: the full MagicDNS FQDN and the LAN mDNS name — both
+        // must ALSO be listed in network_security_config.xml (exact-match
+        // entries) or the WebView refuses them as cleartext.
+        private const val PI_HOST_FQDN = "lego-monitor.tail56cba5.ts.net"
+        private const val PI_HOST_MDNS = "lego-monitor.local"
         // 2026-09-08: ntfy moved to the Tailscale address too (see
         // WebSocketService) and the :8084 public forward is closed. The Pi
         // no longer has any public-internet surface.
