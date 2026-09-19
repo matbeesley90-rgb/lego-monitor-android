@@ -8,6 +8,22 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_REMOTE_MESSAGING" />
     <!-- Notification permission is runtime-requested on Android 13+ -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- 2026-09-18: restart the listener after a reboot (BootReceiver). -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- Full package visibility (Android 11+). Needed so we can detect
+         which installed app owns a marketplace domain and launch it,
+         bypassing link-hijackers like the My O2 app. This is a sideloaded
+         personal app (not on Play), so the broad permission is fine and
+         the narrower <queries> approach proved too limited (queries came
+         back empty, breaking all four apps). -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" />
+        </intent>
+    </queries>
 
     <application
         android:allowBackup="true"
@@ -20,12 +36,38 @@
 
         <activity
             android:name=".MainActivity"
+            android:launchMode="singleTask"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- 2026-09-08: opened from the notification's info face. Native
+             sheet over whatever is on screen; not a browser page. -->
+        <activity
+            android:name=".InfoSheetActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:theme="@style/Theme.LegoMonitor" />
+
+        <!-- 2026-09-09: in-place card redraws (photo size / info block). -->
+        <receiver
+            android:name=".CardActionReceiver"
+            android:exported="false" />
+
+        <!-- 2026-09-18: start the listener at boot and after an APK update.
+             Exported is required for system broadcasts; both actions are
+             protected (only the system can send them). -->
+        <receiver
+            android:name=".BootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
 
         <service
             android:name=".WebSocketService"

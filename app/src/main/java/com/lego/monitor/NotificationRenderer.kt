@@ -21,9 +21,12 @@ import org.json.JSONObject
 object NotificationRenderer {
 
     private const val CHANNEL_ID = "lego_monitor_alerts"
-    private const val BUNDLE_CHANNEL_ID = "lego_monitor_bundles"
 
-    fun show(ctx: Context, frame: JSONObject, isBundle: Boolean = false) {
+    /** [silent]: a replayed frame (WebSocketService `since=` catch-up) —
+     *  no sound/vibration. 2026-09-18: the bundle-topic branch is gone
+     *  (the topic split never went live; V4 bundles get their own channel
+     *  in V4NotificationRenderer). */
+    fun show(ctx: Context, frame: JSONObject, silent: Boolean = false) {
         ensureChannel(ctx)
 
         val title  = frame.optString("title")
@@ -33,16 +36,19 @@ object NotificationRenderer {
         // in the tray rather than overwriting the previous one.
         val notifId = msgId.hashCode()
 
-        val channel = if (isBundle) BUNDLE_CHANNEL_ID else CHANNEL_ID
-        val builder = NotificationCompat.Builder(ctx, channel)
+        // Grail (🎯) alerts should STAY in the tray when tapped — they're a
+        // rare, high-value heads-up the user wants to keep referring back
+        // to. Everything else auto-dismisses on tap as normal.
+        val isGrail = title.contains("Grail", ignoreCase = true)
+
+        val builder = NotificationCompat.Builder(ctx, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification_head)
-            .setContentTitle(if (title.isNotBlank()) title
-                             else if (isBundle) "LEGO bundle" else "LEGO deal")
+            .setContentTitle(if (title.isNotBlank()) title else "LEGO deal")
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
-            .setPriority(if (isBundle) NotificationCompat.PRIORITY_DEFAULT
-                         else NotificationCompat.PRIORITY_HIGH)
-            .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(!isGrail)
+        if (silent) builder.setSilent(true)
 
         // Up to 3 action buttons from ntfy's actions array. Each gets an
         // ACTION_VIEW PendingIntent for the action's URL.
@@ -76,15 +82,6 @@ object NotificationRenderer {
         ).apply {
             description = "LEGO marketplace deal notifications"
             enableVibration(true)
-        })
-        // Separate channel = independent mute/sound/vibration control in
-        // Android settings, without a second app or topic client.
-        mgr.createNotificationChannel(NotificationChannel(
-            BUNDLE_CHANNEL_ID, "Bundle alerts 📦",
-            NotificationManager.IMPORTANCE_DEFAULT
-        ).apply {
-            description = "Job-lot / bundle heads-up notifications"
-            enableVibration(false)
         })
     }
 }
