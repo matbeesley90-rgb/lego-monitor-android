@@ -103,13 +103,17 @@ class MainActivity : AppCompatActivity() {
         handleOpenIntent(intent)
 
         // WebView back button navigates page history before leaving the app.
+        // 2026-10-27: on Android 12+ Back at the root does NOT finish a
+        // singleTask activity, it only sends the task to the background —
+        // so the old "isEnabled = false" stuck for the life of the process
+        // and every later back-swipe (sheet open, other tab) left the app.
+        // Send the task back explicitly and keep this callback armed.
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 if (webView.canGoBack()) {
                     webView.goBack()
                 } else {
-                    isEnabled = false
-                    onBackPressedDispatcher.onBackPressed()
+                    moveTaskToBack(true)
                 }
             }
         })
