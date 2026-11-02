@@ -13,4 +13,9 @@
 
     <color name="bg_dark">#121212</color>
     <color name="fg_default">#E1E1E1</color>
+
+    <!-- Grail (2026-09-08): violet on purpose — never a tier colour. -->
+    <color name="grail_violet">#7C5CE6</color>
+    <color name="grail_violet_deep">#6A4BE6</color>
+    <color name="sheet_bg">#1F2024</color>
 </resources>

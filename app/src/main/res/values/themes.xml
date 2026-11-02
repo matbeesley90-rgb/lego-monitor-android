@@ -1,4 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <style name="Theme.LegoMonitor" parent="Theme.MaterialComponents.DayNight.NoActionBar" />
+
+    <!-- Native info sheet launched from a notification: translucent
+         window, the sheet draws its own dimmed scrim + rounded panel. -->
+    <style name="Theme.LegoMonitor.Sheet" parent="Theme.MaterialComponents.NoActionBar">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowAnimationStyle">@android:style/Animation.Translucent</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
 </resources>

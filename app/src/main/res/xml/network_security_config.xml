@@ -1,13 +1,30 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   Cleartext HTTP/WS is blocked by default on Android 9+ (target SDK 28+).
-  The Pi-hosted ntfy server speaks plain ws://81.96.120.250:8084 — TLS
+  The Pi-hosted ntfy server speaks plain ws://100.66.72.71:8084 — TLS
   would need a cert + reverse proxy that we don't have yet. Scope the
-  cleartext exception to ONLY the Pi's IP so the rest of the app still
-  defaults to HTTPS-only.
+  cleartext exception to ONLY the Pi's addresses so the rest of the app
+  still defaults to HTTPS-only.
+
+  100.66.72.71 is the Pi over Tailscale, which is how the Flask dashboard
+  is reached since the public port-5000 forward was removed (2026-08-06).
+  Cleartext is acceptable there because Tailscale already encrypts the
+  link end-to-end; it never crosses the open internet in the clear.
 -->
 <network-security-config>
     <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="false">81.96.120.250</domain>
+        <!-- Pi over Tailscale — the Flask dashboard -->
+        <domain includeSubdomains="false">100.66.72.71</domain>
+        <!-- 2026-09-18: the same Pi by its Tailscale MagicDNS name, so a
+             dashboard link on http://lego-monitor:5000 also loads in the
+             WebView (MainActivity.isPiHost treats it as the Pi). -->
+        <domain includeSubdomains="true">lego-monitor</domain>
+        <!-- 2026-09-19 re-review: "includeSubdomains" on "lego-monitor"
+             covers *.lego-monitor, NOT the MagicDNS FQDN (a subdomain of
+             ts.net) or the mDNS name — both of which isPiHost keeps in
+             the WebView. List them concretely so those links don't die
+             with ERR_CLEARTEXT_NOT_PERMITTED. -->
+        <domain includeSubdomains="false">lego-monitor.tail56cba5.ts.net</domain>
+        <domain includeSubdomains="false">lego-monitor.local</domain>
     </domain-config>
 </network-security-config>
