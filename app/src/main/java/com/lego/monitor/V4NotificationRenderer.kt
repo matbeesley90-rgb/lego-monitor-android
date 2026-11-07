@@ -133,6 +133,7 @@ object V4NotificationRenderer {
                 ctx.getSystemService(NotificationManager::class.java)
                     .cancel(notifId)
                 synchronized(bitmapCache) { bitmapCache.remove(cacheKey(payload)) }
+                postSummary(ctx)
                 return
             }
 
@@ -600,11 +601,16 @@ object V4NotificationRenderer {
         // channel settings show (the custom view overrides display).
         // Bundles have no pct ("eBay • 0%" was every bundle — audit S5);
         // the row's price + profit text is the useful summary.
-        val contentTitle = if (p.kind == "bundle") {
-            "${brandLabel(p.brand)} • £${p.asking.roundToInt()} • ${p.bundleTail.ifBlank { "bundle" }}"
-        } else {
-            "${brandLabel(p.brand)} • ${p.pct}%"
-        }
+        // 2026-11-06 (Mat: "fix the shit notifications", option C of the
+        // stack mockups): the COLLAPSED row is now the system template —
+        // One UI's group pill, the lock screen and the expanded stack all
+        // squash the collapsed view to a third of its width, and our
+        // 64 dp custom row fell apart there (price cut to "£3…", bands
+        // crammed, green wash a sticker). The custom row survives as the
+        // heads-up popup, the custom card as the expanded view; every
+        // card joins one group under a system summary (postSummary).
+        val remainingMs = countdownRemainingMs(p)
+        val contentTitle = nativeTitle(p, remainingMs != null)
         val builder = NotificationCompat.Builder(ctx, channel)
             .setSmallIcon(R.drawable.ic_notification_head)
             .setColor(if (p.redAlert) Color.parseColor(RED_ALERT_BG)
@@ -618,10 +624,22 @@ object V4NotificationRenderer {
             // generation so an in-flight image download can't re-post the
             // card the user just dismissed (2026-09-19 re-review).
             .setDeleteIntent(dismissIntent(ctx, notifId))
-            .setCustomContentView(collapsed)
+            .setCustomHeadsUpContentView(collapsed)
             .setCustomBigContentView(expanded)
             .setStyle(NotificationCompat.DecoratedCustomViewStyle())
             .setContentTitle(contentTitle)
+            .setContentText(sellerTitle)
+            .setGroup(GROUP_KEY)
+            .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_CHILDREN)
+        if (bmp != null) builder.setLargeIcon(bmp)
+        if (remainingMs != null) {
+            // Live countdown in the row's time slot ("🔨 2:36" in the
+            // header), the system template's only ticking element.
+            builder.setShowWhen(true)
+                .setWhen(System.currentTimeMillis() + remainingMs)
+                .setUsesChronometer(true)
+                .setChronometerCountDown(true)
+        }
 
         // Follow-up appraisal cards (server "update": true) are fully
         // silent even if the original was dismissed — the numbers just
@@ -664,6 +682,77 @@ object V4NotificationRenderer {
 
         ctx.getSystemService(NotificationManager::class.java)
             .notify(notifId, builder.build())
+        postSummary(ctx)
+    }
+
+    // ── Group summary (2026-11-06, option C) ───────────────────────────
+    // One pill for the pile: "11 new · 3 🔥 · 2 ending" over the newest
+    // titles. Rebuilt from the live notifications on every post, cancel
+    // and dismissal, so it always reflects what is actually in the shade
+    // and vanishes with the last card. GROUP_ALERT_CHILDREN above means
+    // the summary itself never buzzes.
+    private const val GROUP_KEY = "lego_monitor_cards"
+    private const val SUMMARY_ID = 0x5A5A5A
+
+    private fun nativeTitle(p: V4Payload, timerLive: Boolean): String {
+        val parts = ArrayList<String>(5)
+        parts.add(brandLabel(p.brand))
+        val ml = p.minsLeft
+        if (!timerLive && ml != null && ml >= 0) {
+            parts.add(if (ml > 0) "\uD83D\uDD28 ${ml}m" else "\uD83D\uDD28 ending")
+        }
+        parts.add("\u00A3${p.asking.roundToInt()}")
+        if (p.kind == "bundle") {
+            if (p.bundleTail.isNotBlank()) parts.add(p.bundleTail)
+            val fb = p.figBands
+            if (fb != null && fb.totalN > 0) {
+                parts.add(if (fb.totalGbp != null) "${fb.totalN} figs \u00A3${fb.totalGbp}"
+                          else "${fb.totalN} figs")
+            }
+        } else if (p.pct != 0) {
+            parts.add("${p.pct}%")
+        }
+        return parts.joinToString(" \u00B7 ")
+    }
+
+    fun postSummary(ctx: Context) {
+        try {
+            val mgr = ctx.getSystemService(NotificationManager::class.java) ?: return
+            val children = mgr.activeNotifications
+                .filter { it.notification.group == GROUP_KEY && it.id != SUMMARY_ID }
+                .sortedByDescending { it.postTime }
+            if (children.isEmpty()) { mgr.cancel(SUMMARY_ID); return }
+            val titles = children.map {
+                it.notification.extras.getCharSequence(android.app.Notification.EXTRA_TITLE)?.toString() ?: ""
+            }
+            val hot = titles.count { it.contains("\uD83D\uDD25") }
+            val ending = titles.count { it.contains("\uD83D\uDD28") } +
+                children.count { it.notification.extras.getBoolean(android.app.Notification.EXTRA_CHRONOMETER_COUNT_DOWN, false) }
+            val head = StringBuilder("${children.size} new")
+            if (hot > 0) head.append(" \u00B7 $hot \uD83D\uDD25")
+            if (ending > 0) head.append(" \u00B7 $ending ending")
+            val inbox = NotificationCompat.InboxStyle()
+            titles.take(6).forEach { inbox.addLine(it) }
+            if (children.size > 6) inbox.setSummaryText("+ ${children.size - 6} more")
+            val n = NotificationCompat.Builder(ctx, CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_notification_head)
+                .setColor(Color.parseColor("#3B98E0"))
+                .setContentTitle(head.toString())
+                .setContentText(titles.take(3).joinToString(" \u00B7 "))
+                .setStyle(inbox)
+                .setGroup(GROUP_KEY)
+                .setGroupSummary(true)
+                .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_CHILDREN)
+                .setSilent(true)
+                .setAutoCancel(true)
+                .setContentIntent(PendingIntent.getActivity(
+                    ctx, SUMMARY_ID, Intent(ctx, MainActivity::class.java),
+                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT))
+                .build()
+            mgr.notify(SUMMARY_ID, n)
+        } catch (e: Exception) {
+            Log.w(TAG, "summary post failed", e)
+        }
     }
 
     // ── Auction countdown (2026-09-18 audit S2) ─────────────────────────

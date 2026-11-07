@@ -20,6 +20,11 @@ class CardActionReceiver : BroadcastReceiver() {
         // the card the user just swiped/tapped away.
         if (intent.action == ACTION_DISMISSED) {
             V4NotificationRenderer.noteDismissed(intent.getIntExtra(EXTRA_NOTIF_ID, 0))
+            // 2026-11-06: rebuild the group summary once the card is gone
+            // (the deleteIntent fires while it may still be listed).
+            val app = ctx.applicationContext
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(
+                { V4NotificationRenderer.postSummary(app) }, 400)
             return
         }
         if (intent.action != ACTION_REDRAW) return

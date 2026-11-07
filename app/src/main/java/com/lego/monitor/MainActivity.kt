@@ -398,6 +398,20 @@ class MainActivity : AppCompatActivity() {
             IntentFilter(WebSocketService.ACTION_STATUS),
             ContextCompat.RECEIVER_NOT_EXPORTED
         )
+        // 2026-11-06: Samsung kills the listener service under battery
+        // management and this activity can stay resident for days, so the
+        // onCreate start above never ran again - the app sat open with no
+        // websocket to ntfy and three deal pushes were never drawn. Every
+        // return to the foreground now (re)starts the service; on a service
+        // that is already running this is a no-op onStartCommand.
+        val canStart = Build.VERSION.SDK_INT < 33 || ContextCompat.checkSelfPermission(
+            this, Manifest.permission.POST_NOTIFICATIONS
+        ) == PackageManager.PERMISSION_GRANTED
+        if (canStart) {
+            try { startMonitorService() } catch (e: Exception) {
+                android.util.Log.w("MainActivity", "service restart on foreground failed", e)
+            }
+        }
     }
 
     override fun onStop() {
