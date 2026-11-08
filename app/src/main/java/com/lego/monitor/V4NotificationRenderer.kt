@@ -13,7 +13,6 @@ import android.os.SystemClock
 import android.text.SpannableStringBuilder
 import android.text.Spanned
 import android.text.style.ForegroundColorSpan
-import android.text.style.RelativeSizeSpan
 import android.text.style.StyleSpan
 import android.util.Log
 import android.util.TypedValue
@@ -225,6 +224,8 @@ object V4NotificationRenderer {
         expanded.setTextViewText(R.id.notif_title_tail,
             brandTitleTailSpannable(p, dropHeadSep = false, timerLive = timerLive))
         applyCountdown(p, collapsed, expanded)
+        fillStack(collapsed, p)
+        fillStack(expanded, p)
 
         // Body header — seller's raw title (verbatim from the
         // marketplace). Collapsed heads-up shows the same string
@@ -883,36 +884,55 @@ object V4NotificationRenderer {
             // Option D (Mat, 2026-09-11): the profit replaces the bricks —
             // "• £108 • 🔥 +369%" coloured by band, then the auction
             // countdown, then the head (last, as always).
-            if (p.bundleTail.isNotBlank()) {
-                sb.append(" · ")
-                val ts = sb.length
-                sb.append(p.bundleTail)
-                sb.setSpan(ForegroundColorSpan(bandTextColor(p)),
-                    ts, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-            }
+            // 2026-11-08: the band-coloured profit text ("🔥 +369%") and
+            // the £ now live in the two-line stack (fillStack), not here.
             if (p.iconColor.isNotBlank() && !dropHeadSep) sb.append(" ·")
             return sb
         }
-        sb.append(" · ")
-        val pctStart = sb.length
-        sb.append("${p.pct}%")
-        val pctEnd = sb.length
-        // Headline pct: RelativeSizeSpan scales it above the base, colour
-        // from style.
-        sb.setSpan(RelativeSizeSpan(s.titlePctScale),
-            pctStart, pctEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-        sb.setSpan(ForegroundColorSpan(s.titlePctColor),
-            pctStart, pctEnd, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-        // (Auction countdown now leads the row — see the top of this
-        // function — so nothing is appended here.)
-        // Mat's spec: the head is the last element on the row, preceded
-        // by the same plain "•" separator as everything else —
-        // "ebay • 70% • [head]" / "ebay • 70% • 5m • [head]". Only
-        // appended when a band applies (head hidden otherwise).
+        // 2026-11-08 (Mat): the headline pct moved off the line into the
+        // two-line stack beside the price ("37%" over "+£12"), see fillStack.
         if (p.iconColor.isNotBlank() && !dropHeadSep) {
             sb.append(" ·")
         }
         return sb
+    }
+
+    /** The "% over +££" stack on the title row (Mat, 2026-11-08): line 1
+     *  is the headline pct (deals: style colour; bundles: the band-coloured
+     *  bundle_tail such as "🔥 +369%" / "unpriced"), line 2 the £ profit
+     *  (deals: payload profit, bundles: bundle_parts.profit). Hidden when
+     *  there is nothing to show. */
+    private fun fillStack(rv: RemoteViews, p: V4Payload) {
+        val s = p.style
+        var line1 = ""; var c1 = s.titlePctColor
+        var line2 = ""; var c2 = Color.parseColor("#4CC38A")
+        if (p.kind == "bundle") {
+            line1 = p.bundleTail
+            c1 = bandTextColor(p)
+            val prof = p.bundleParts?.profit?.trim().orEmpty()
+            if (prof.isNotEmpty() && p.bundleParts?.warn.isNullOrBlank()) {
+                val pos = p.bundleParts?.positive ?: true
+                line2 = (if (pos && !prof.startsWith("-") && !prof.startsWith("+")) "+" else "") + prof
+                c2 = if (pos) Color.parseColor("#4CC38A") else Color.parseColor("#E5484D")
+            }
+        } else {
+            if (p.pct != 0) line1 = "${p.pct}%"
+            val pr = p.profit
+            if (pr != null) {
+                line2 = (if (pr >= 0) "+£" else "-£") + kotlin.math.abs(pr)
+                c2 = if (pr >= 0) Color.parseColor("#4CC38A") else Color.parseColor("#E5484D")
+            }
+        }
+        if (line1.isEmpty() && line2.isEmpty()) {
+            rv.setViewVisibility(R.id.notif_stack, View.GONE); return
+        }
+        rv.setViewVisibility(R.id.notif_stack, View.VISIBLE)
+        rv.setTextViewText(R.id.notif_stack_pct, line1)
+        rv.setTextColor(R.id.notif_stack_pct, c1)
+        rv.setViewVisibility(R.id.notif_stack_pct, if (line1.isEmpty()) View.GONE else View.VISIBLE)
+        rv.setTextViewText(R.id.notif_stack_profit, line2)
+        rv.setTextColor(R.id.notif_stack_profit, c2)
+        rv.setViewVisibility(R.id.notif_stack_profit, if (line2.isEmpty()) View.GONE else View.VISIBLE)
     }
 
     /** Drawable resource for the brand's wordmark. Falls back to the

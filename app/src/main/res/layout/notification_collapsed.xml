@@ -52,8 +52,8 @@
         android:layout_weight="1"
         android:paddingStart="8dp"
         android:paddingEnd="8dp"
-        android:paddingTop="6dp"
-        android:paddingBottom="6dp"
+        android:paddingTop="4dp"
+        android:paddingBottom="4dp"
         android:clipToPadding="false">
 
     <!-- 2026-09-09 (Mat): a little square block hanging from the far right
@@ -127,6 +127,37 @@
             android:singleLine="true"
             android:includeFontPadding="false"
             android:ellipsize="end" />
+
+        <!-- 2026-11-08 (Mat): "% over +££" — two small lines stacked on the
+             title row right after the price. Both GONE when there is no
+             figure to show; the profit line alone GONE when unknown. -->
+        <LinearLayout
+            android:id="@+id/notif_stack"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="7dp"
+            android:orientation="vertical"
+            android:gravity="center_vertical"
+            android:visibility="gone">
+            <TextView
+                android:id="@+id/notif_stack_pct"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="10sp"
+                android:textStyle="bold"
+                android:singleLine="true"
+                android:includeFontPadding="false"
+                android:lineSpacingExtra="0dp" />
+            <TextView
+                android:id="@+id/notif_stack_profit"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="10sp"
+                android:textStyle="bold"
+                android:singleLine="true"
+                android:includeFontPadding="false"
+                android:lineSpacingExtra="0dp" />
+        </LinearLayout>
 
         <!-- Bundle marker: stacked bricks, tinted muted grey, sitting
              right after "• £X •". Pairs with the grey head that follows
