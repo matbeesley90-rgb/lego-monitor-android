@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- "Deal check" — clipboard with a tick, duotone like the sheet's icon set.
+     Tinted at runtime: amber when something needs attention, green when the
+     deal checks out, grey otherwise. (2026-09-09) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <path android:pathData="M6,5h12a1.5,1.5 0 0,1 1.5,1.5v13A1.5,1.5 0 0,1 18,21H6a1.5,1.5 0 0,1 -1.5,-1.5v-13A1.5,1.5 0 0,1 6,5z"
+        android:fillColor="#FFFFFFFF" android:fillAlpha="0.22"/>
+    <path android:pathData="M6,5h12a1.5,1.5 0 0,1 1.5,1.5v13A1.5,1.5 0 0,1 18,21H6a1.5,1.5 0 0,1 -1.5,-1.5v-13A1.5,1.5 0 0,1 6,5z"
+        android:strokeColor="#FFFFFFFF" android:strokeWidth="1.6" android:strokeLineJoin="round"/>
+    <path android:pathData="M9,3.4h6v3.2H9z" android:fillColor="#FFFFFFFF"/>
+    <path android:pathData="M8.4,13.4l2.5,2.5 4.8,-5" android:strokeColor="#FFFFFFFF" android:strokeWidth="2" android:strokeLineCap="round" android:strokeLineJoin="round"/>
+</vector>
