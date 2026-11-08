@@ -466,10 +466,12 @@ object V4NotificationRenderer {
         expanded.setViewPadding(R.id.notif_row2, 0, rowGapPx, 0, 0)
 
         // Collapsed gets the same title scale (timer view included).
+        // One point smaller than the card: the decorated frame leaves the
+        // collapsed row ~170 dp for "[logo] 🔨17:32 · £35 · 37%".
         collapsed.setTextViewTextSize(R.id.notif_title_tail,
-            TypedValue.COMPLEX_UNIT_SP, s.titleBaseSp)
+            TypedValue.COMPLEX_UNIT_SP, s.titleBaseSp - 1f)
         collapsed.setTextViewTextSize(R.id.notif_timer,
-            TypedValue.COMPLEX_UNIT_SP, s.titleBaseSp)
+            TypedValue.COMPLEX_UNIT_SP, s.titleBaseSp - 1f)
 
         fillGridRow(expanded, p, top = true)
         fillGridRow(expanded, p, top = false)
@@ -601,14 +603,15 @@ object V4NotificationRenderer {
         // channel settings show (the custom view overrides display).
         // Bundles have no pct ("eBay • 0%" was every bundle — audit S5);
         // the row's price + profit text is the useful summary.
-        // 2026-11-06 (Mat: "fix the shit notifications", option C of the
-        // stack mockups): the COLLAPSED row is now the system template —
-        // One UI's group pill, the lock screen and the expanded stack all
-        // squash the collapsed view to a third of its width, and our
-        // 64 dp custom row fell apart there (price cut to "£3…", bands
-        // crammed, green wash a sticker). The custom row survives as the
-        // heads-up popup, the custom card as the expanded view; every
-        // card joins one group under a system summary (postSummary).
+        // 2026-11-08 (Mat: "worse than before"): v0.2.21 tried the system
+        // template for the collapsed row (option C) — One UI cut the title
+        // to "eBay · £31 ·…", showed two clocks (post time + chronometer)
+        // and dropped the bands, and the large icon stole a column from
+        // the expanded card so the custom view sat squashed beside a
+        // duplicate photo. Back to the custom row everywhere, with no
+        // large icon and no chronometer-in-header; the first line is
+        // tightened so it fits the decorated width (see applyCountdown /
+        // brandTitleTailSpannable). The group + system summary stays.
         val remainingMs = countdownRemainingMs(p)
         val contentTitle = nativeTitle(p, remainingMs != null)
         val builder = NotificationCompat.Builder(ctx, channel)
@@ -624,6 +627,7 @@ object V4NotificationRenderer {
             // generation so an in-flight image download can't re-post the
             // card the user just dismissed (2026-09-19 re-review).
             .setDeleteIntent(dismissIntent(ctx, notifId))
+            .setCustomContentView(collapsed)
             .setCustomHeadsUpContentView(collapsed)
             .setCustomBigContentView(expanded)
             .setStyle(NotificationCompat.DecoratedCustomViewStyle())
@@ -631,15 +635,11 @@ object V4NotificationRenderer {
             .setContentText(sellerTitle)
             .setGroup(GROUP_KEY)
             .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_CHILDREN)
-        if (bmp != null) builder.setLargeIcon(bmp)
-        if (remainingMs != null) {
-            // Live countdown in the row's time slot ("🔨 2:36" in the
-            // header), the system template's only ticking element.
-            builder.setShowWhen(true)
-                .setWhen(System.currentTimeMillis() + remainingMs)
-                .setUsesChronometer(true)
-                .setChronometerCountDown(true)
-        }
+        // No setLargeIcon: the system's large-icon column narrows every
+        // custom view (collapsed AND expanded) and duplicates our thumb.
+        // No chronometer-in-header either: One UI showed it next to the
+        // post time as a second clock. The custom row's own Chronometer
+        // (applyCountdown) is the countdown.
 
         // Follow-up appraisal cards (server "update": true) are fully
         // silent even if the original was dismissed — the numbers just
@@ -781,7 +781,7 @@ object V4NotificationRenderer {
                 rv.setChronometerCountDown(R.id.notif_timer, true)
                 rv.setChronometer(R.id.notif_timer,
                     SystemClock.elapsedRealtime() + remaining,
-                    "• 🔨 %s", true)
+                    "🔨%s", true)
                 rv.setViewVisibility(R.id.notif_timer, View.VISIBLE)
             } else {
                 rv.setViewVisibility(R.id.notif_timer, View.GONE)
@@ -846,7 +846,7 @@ object V4NotificationRenderer {
     ): CharSequence {
         val s = p.style
         val sb = SpannableStringBuilder()
-        sb.append("• ")
+        sb.append("· ")
         // AUCTION: the countdown leads the row, before the price (Mat,
         // 2026-09-11: "we still don't know it is an auction because it
         // cuts it off" — last on the row it was the first thing ellipsised).
@@ -862,7 +862,7 @@ object V4NotificationRenderer {
                 ts, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
             sb.setSpan(StyleSpan(android.graphics.Typeface.BOLD),
                 ts, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-            sb.append(" • ")
+            sb.append(" · ")
         }
         // Asking price on the title line — the number that decides whether a
         // deal is worth opening. Kept here (not just in the price grid below)
@@ -884,16 +884,16 @@ object V4NotificationRenderer {
             // "• £108 • 🔥 +369%" coloured by band, then the auction
             // countdown, then the head (last, as always).
             if (p.bundleTail.isNotBlank()) {
-                sb.append(" • ")
+                sb.append(" · ")
                 val ts = sb.length
                 sb.append(p.bundleTail)
                 sb.setSpan(ForegroundColorSpan(bandTextColor(p)),
                     ts, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
             }
-            if (p.iconColor.isNotBlank() && !dropHeadSep) sb.append(" •")
+            if (p.iconColor.isNotBlank() && !dropHeadSep) sb.append(" ·")
             return sb
         }
-        sb.append(" • ")
+        sb.append(" · ")
         val pctStart = sb.length
         sb.append("${p.pct}%")
         val pctEnd = sb.length
@@ -910,7 +910,7 @@ object V4NotificationRenderer {
         // "ebay • 70% • [head]" / "ebay • 70% • 5m • [head]". Only
         // appended when a band applies (head hidden otherwise).
         if (p.iconColor.isNotBlank() && !dropHeadSep) {
-            sb.append(" •")
+            sb.append(" ·")
         }
         return sb
     }
