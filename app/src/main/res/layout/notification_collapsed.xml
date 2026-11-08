@@ -246,13 +246,58 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_toEndOf="@id/notif_thumb"
-        android:layout_below="@id/notif_bands_row"
+        android:layout_below="@id/notif_title_row"
         android:layout_marginStart="10dp"
         android:layout_marginTop="1dp"
         android:textSize="11sp"
         android:singleLine="true"
         android:includeFontPadding="false"
         android:ellipsize="end" />
+
+    <!-- 2026-11-08 (Mat): row 3 = seller "(reviews)" on the left, and on
+         the right the minifig head tinted to the most valuable identified
+         fig with the fig count ("×12"). Replaces the bands row here. -->
+    <LinearLayout
+        android:id="@+id/notif_row3"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_toEndOf="@id/notif_thumb"
+        android:layout_below="@id/notif_subtitle"
+        android:layout_marginStart="10dp"
+        android:layout_marginTop="1dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:visibility="gone">
+        <TextView
+            android:id="@+id/notif_seller"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:textSize="11sp"
+            android:textColor="#9AA0A6"
+            android:singleLine="true"
+            android:ellipsize="end"
+            android:includeFontPadding="false" />
+        <ImageView
+            android:id="@+id/notif_r3_head"
+            android:layout_width="12dp"
+            android:layout_height="12dp"
+            android:layout_marginStart="8dp"
+            android:layout_marginEnd="2dp"
+            android:src="@drawable/ic_notification_head"
+            android:visibility="gone"
+            android:contentDescription="@null" />
+        <TextView
+            android:id="@+id/notif_r3_count"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:textColor="#F2F2F2"
+            android:singleLine="true"
+            android:includeFontPadding="false"
+            android:visibility="gone" />
+    </LinearLayout>
 
     </RelativeLayout>
 

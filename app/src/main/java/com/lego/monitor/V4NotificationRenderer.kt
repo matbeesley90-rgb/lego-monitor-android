@@ -226,6 +226,7 @@ object V4NotificationRenderer {
         applyCountdown(p, collapsed, expanded)
         fillStack(collapsed, p)
         fillStack(expanded, p)
+        fillRow3(collapsed, p)
 
         // Body header — seller's raw title (verbatim from the
         // marketplace). Collapsed heads-up shows the same string
@@ -897,6 +898,33 @@ object V4NotificationRenderer {
         return sb
     }
 
+    /** Collapsed row 3 (Mat, 2026-11-08): "seller (reviews)" on the left;
+     *  on the right the minifig head tinted to the most valuable identified
+     *  fig (payload icon_color, the listing-card convention) with the fig
+     *  count. Hidden when there is neither a seller nor a count. */
+    private fun fillRow3(rv: RemoteViews, p: V4Payload) {
+        val seller = p.seller.trim()
+        val n = p.figBands?.totalN ?: 0
+        if (seller.isEmpty() && n <= 0) {
+            rv.setViewVisibility(R.id.notif_row3, View.GONE); return
+        }
+        rv.setViewVisibility(R.id.notif_row3, View.VISIBLE)
+        rv.setTextViewText(R.id.notif_seller, seller)
+        if (n > 0) {
+            val tint = try {
+                if (p.iconColor.isNotBlank()) Color.parseColor(p.iconColor) else Color.parseColor("#F2F2F2")
+            } catch (_: Exception) { Color.parseColor("#F2F2F2") }
+            rv.setImageViewResource(R.id.notif_r3_head, R.drawable.ic_notification_head)
+            rv.setInt(R.id.notif_r3_head, "setColorFilter", tint)
+            rv.setTextViewText(R.id.notif_r3_count, "\u00D7$n")
+            rv.setViewVisibility(R.id.notif_r3_head, View.VISIBLE)
+            rv.setViewVisibility(R.id.notif_r3_count, View.VISIBLE)
+        } else {
+            rv.setViewVisibility(R.id.notif_r3_head, View.GONE)
+            rv.setViewVisibility(R.id.notif_r3_count, View.GONE)
+        }
+    }
+
     /** The "% over +££" stack on the title row (Mat, 2026-11-08): line 1
      *  is the headline pct (deals: style colour; bundles: the band-coloured
      *  bundle_tail such as "🔥 +369%" / "unpriced"), line 2 the £ profit
@@ -1011,16 +1039,10 @@ object V4NotificationRenderer {
             expanded.setViewVisibility(R.id.notif_footer_bands, View.GONE)
             return
         }
-        // collapsed
-        collapsed.setViewVisibility(R.id.notif_bands_row, View.VISIBLE)
+        // collapsed: 2026-11-08 (Mat) the bands row is gone from the
+        // collapsed card — row 3 (fillRow3) carries seller + one head ×N.
+        collapsed.setViewVisibility(R.id.notif_bands_row, View.GONE)
         collapsed.setViewVisibility(R.id.notif_fig_head, View.GONE)
-        for (i in CB_H.indices) fillBandSlot(collapsed, CB_H[i], CB_N[i], fb.bandsFit.getOrNull(i))
-        collapsed.setImageViewResource(R.id.notif_cb_tot_h, R.drawable.ic_notification_head)
-        collapsed.setInt(R.id.notif_cb_tot_h, "setColorFilter", Color.parseColor("#F2F2F2"))
-        collapsed.setTextViewText(R.id.notif_cb_tot_n,
-            if (fb.totalGbp != null) "\u00D7${fb.totalN} = \u00A3${fb.totalGbp}" else "\u00D7${fb.totalN} counted")
-        collapsed.setViewVisibility(R.id.notif_cb_tot_h, View.VISIBLE)
-        collapsed.setViewVisibility(R.id.notif_cb_tot_n, View.VISIBLE)
         // expanded footer
         expanded.setViewVisibility(R.id.notif_footer_row, View.VISIBLE)
         expanded.setViewVisibility(R.id.notif_footer_head, View.GONE)

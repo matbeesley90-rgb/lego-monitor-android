@@ -27,6 +27,8 @@ data class V4Payload(
     val pct: Int,
     // 2026-11-08: £ profit behind the headline pct (Pi: ref − true cost); null = unknown
     val profit: Int? = null,
+    // 2026-11-08: "seller (reviews)" for the collapsed row 3
+    val seller: String = "",
     val asking: Double,
     val trueCost: Double,
     val blNew: Double,
@@ -127,6 +129,7 @@ data class V4Payload(
                     setNum       = o.optString("set_num", ""),
                     pct          = o.optInt("pct", 0),
                     profit       = if (o.has("profit") && !o.isNull("profit")) o.optInt("profit") else null,
+                    seller       = o.optString("seller", ""),
                     asking       = o.optDouble("asking", 0.0),
                     trueCost     = o.optDouble("true_cost", 0.0),
                     blNew        = o.optDouble("bl_new", 0.0),
