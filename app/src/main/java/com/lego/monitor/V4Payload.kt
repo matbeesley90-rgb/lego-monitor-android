@@ -29,6 +29,8 @@ data class V4Payload(
     val profit: Int? = null,
     // 2026-11-08: "seller (reviews)" for the collapsed row 3
     val seller: String = "",
+    // 2026-11-08: £ of the most valuable identified fig (row 3, beside the band-tinted head)
+    val topFigGbp: Int? = null,
     val asking: Double,
     val trueCost: Double,
     val blNew: Double,
@@ -130,6 +132,7 @@ data class V4Payload(
                     pct          = o.optInt("pct", 0),
                     profit       = if (o.has("profit") && !o.isNull("profit")) o.optInt("profit") else null,
                     seller       = o.optString("seller", ""),
+                    topFigGbp    = if (o.has("top_fig_gbp") && !o.isNull("top_fig_gbp")) o.optInt("top_fig_gbp") else null,
                     asking       = o.optDouble("asking", 0.0),
                     trueCost     = o.optDouble("true_cost", 0.0),
                     blNew        = o.optDouble("bl_new", 0.0),

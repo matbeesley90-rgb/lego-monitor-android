@@ -905,17 +905,39 @@ object V4NotificationRenderer {
     private fun fillRow3(rv: RemoteViews, p: V4Payload) {
         val seller = p.seller.trim()
         val n = p.figBands?.totalN ?: 0
-        if (seller.isEmpty() && n <= 0) {
+        val topGbp = p.topFigGbp
+        val hasTop = p.iconColor.isNotBlank() || (topGbp != null && topGbp > 0)
+        if (seller.isEmpty() && n <= 0 && !hasTop) {
             rv.setViewVisibility(R.id.notif_row3, View.GONE); return
         }
         rv.setViewVisibility(R.id.notif_row3, View.VISIBLE)
         rv.setTextViewText(R.id.notif_seller, seller)
-        if (n > 0) {
+        // Left of the count: the most valuable identified fig — head tinted
+        // to its value band (icon_color, the listing-card ring colour) and
+        // its £ (Mat, 2026-11-08: "to the left it should show the highest
+        // value figure").
+        if (hasTop) {
             val tint = try {
                 if (p.iconColor.isNotBlank()) Color.parseColor(p.iconColor) else Color.parseColor("#F2F2F2")
             } catch (_: Exception) { Color.parseColor("#F2F2F2") }
+            rv.setImageViewResource(R.id.notif_r3_tophead, R.drawable.ic_notification_head)
+            rv.setInt(R.id.notif_r3_tophead, "setColorFilter", tint)
+            rv.setViewVisibility(R.id.notif_r3_tophead, View.VISIBLE)
+            if (topGbp != null && topGbp > 0) {
+                rv.setTextViewText(R.id.notif_r3_topgbp, "\u00A3$topGbp")
+                rv.setTextColor(R.id.notif_r3_topgbp, tint)
+                rv.setViewVisibility(R.id.notif_r3_topgbp, View.VISIBLE)
+            } else {
+                rv.setViewVisibility(R.id.notif_r3_topgbp, View.GONE)
+            }
+        } else {
+            rv.setViewVisibility(R.id.notif_r3_tophead, View.GONE)
+            rv.setViewVisibility(R.id.notif_r3_topgbp, View.GONE)
+        }
+        // Right: grey head + how many figs.
+        if (n > 0) {
             rv.setImageViewResource(R.id.notif_r3_head, R.drawable.ic_notification_head)
-            rv.setInt(R.id.notif_r3_head, "setColorFilter", tint)
+            rv.setInt(R.id.notif_r3_head, "setColorFilter", Color.parseColor("#9AA0A6"))
             rv.setTextViewText(R.id.notif_r3_count, "\u00D7$n")
             rv.setViewVisibility(R.id.notif_r3_head, View.VISIBLE)
             rv.setViewVisibility(R.id.notif_r3_count, View.VISIBLE)

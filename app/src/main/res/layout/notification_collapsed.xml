@@ -278,6 +278,26 @@
             android:singleLine="true"
             android:ellipsize="end"
             android:includeFontPadding="false" />
+        <!-- most valuable identified fig: head tinted to its value band + "£N" -->
+        <ImageView
+            android:id="@+id/notif_r3_tophead"
+            android:layout_width="12dp"
+            android:layout_height="12dp"
+            android:layout_marginStart="8dp"
+            android:layout_marginEnd="2dp"
+            android:src="@drawable/ic_notification_head"
+            android:visibility="gone"
+            android:contentDescription="@null" />
+        <TextView
+            android:id="@+id/notif_r3_topgbp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:singleLine="true"
+            android:includeFontPadding="false"
+            android:visibility="gone" />
+        <!-- grey head + fig count -->
         <ImageView
             android:id="@+id/notif_r3_head"
             android:layout_width="12dp"
