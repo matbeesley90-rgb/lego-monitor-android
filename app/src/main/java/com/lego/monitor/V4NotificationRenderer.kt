@@ -100,6 +100,11 @@ object V4NotificationRenderer {
         ): Boolean = size > 24
     }
     private fun cacheKey(p: V4Payload): String = p.replaceKey.ifBlank { p.imageUrl }
+    // 2026-11-08: the top fig's face render, keyed by its URL (shared across
+    // cards that identify the same fig).
+    private val faceCache = HashMap<String, android.graphics.Bitmap>()
+    private fun cachedFace(p: V4Payload): android.graphics.Bitmap? =
+        if (p.topFigImg.isBlank()) null else synchronized(faceCache) { faceCache[p.topFigImg] }
     private fun cachedBitmap(p: V4Payload): android.graphics.Bitmap? =
         synchronized(bitmapCache) {
             bitmapCache[cacheKey(p)]?.takeIf { it.url == p.imageUrl }?.bmp
@@ -145,7 +150,28 @@ object V4NotificationRenderer {
             val frameJson = frame.toString()
             val cached = cachedBitmap(payload)
             Log.d(TAG, "V4 posting notifId=$notifId gen=$gen cachedBitmap=${cached != null}")
-            post(ctx, notifId, payload, cached, frameJson, mode, silent)
+            post(ctx, notifId, payload, cached, frameJson, mode, silent, cachedFace(payload))
+
+            // Top fig's face for row 3 — small (local render on the Pi),
+            // fetched off-thread like the photo; re-post when it lands.
+            if (cachedFace(payload) == null && payload.topFigImg.isNotBlank()) {
+                imageExecutor.execute {
+                    try {
+                        if (generation[notifId] != gen) return@execute
+                        val conn = URL(payload.topFigImg).openConnection()
+                        conn.connectTimeout = 5000
+                        conn.readTimeout = 10000
+                        val face = conn.getInputStream().use { BitmapFactory.decodeStream(it) }
+                            ?: return@execute
+                        synchronized(faceCache) { faceCache[payload.topFigImg] = face }
+                        if (generation[notifId] == gen) {
+                            post(ctx, notifId, payload, cachedBitmap(payload), frameJson, mode, silent, face)
+                        }
+                    } catch (e: Exception) {
+                        Log.w(TAG, "V4 face fetch failed", e)
+                    }
+                }
+            }
 
             if (cached == null && payload.imageUrl.isNotBlank()) {
                 imageExecutor.execute {
@@ -177,7 +203,7 @@ object V4NotificationRenderer {
                         // re-post after a cancel.
                         if (generation[notifId] == gen) {
                             Log.d(TAG, "V4 image decoded ${bmp.width}x${bmp.height}, re-posting")
-                            post(ctx, notifId, payload, bmp, frameJson, mode, silent)
+                            post(ctx, notifId, payload, bmp, frameJson, mode, silent, cachedFace(payload))
                         } else {
                             Log.d(TAG, "V4 image landed after gen moved (notifId=$notifId), not re-posting")
                         }
@@ -195,7 +221,8 @@ object V4NotificationRenderer {
         ctx: Context, notifId: Int, p: V4Payload,
         bmp: android.graphics.Bitmap?,
         frameJson: String = "", mode: CardMode = CardMode(),
-        silent: Boolean = false
+        silent: Boolean = false,
+        face: android.graphics.Bitmap? = null
     ) {
         val collapsed = RemoteViews(ctx.packageName, R.layout.notification_collapsed)
         val expanded  = RemoteViews(ctx.packageName, R.layout.notification_expanded)
@@ -226,7 +253,7 @@ object V4NotificationRenderer {
         applyCountdown(p, collapsed, expanded)
         fillStack(collapsed, p)
         fillStack(expanded, p)
-        fillRow3(collapsed, p)
+        fillRow3(collapsed, p, face, ctx)
 
         // Body header — seller's raw title (verbatim from the
         // marketplace). Collapsed heads-up shows the same string
@@ -902,30 +929,71 @@ object V4NotificationRenderer {
      *  on the right the minifig head tinted to the most valuable identified
      *  fig (payload icon_color, the listing-card convention) with the fig
      *  count. Hidden when there is neither a seller nor a count. */
-    private fun fillRow3(rv: RemoteViews, p: V4Payload) {
+    /** Ring colour by the fig's value — the listing card's face rings
+     *  (v0 grey, v1 amber £10+, v2 green £30+, v3 red £50+). */
+    private fun faceRingColor(gbp: Int?): Int = when {
+        gbp == null -> Color.parseColor("#8A8F98")
+        gbp >= 50   -> Color.parseColor("#F87171")
+        gbp >= 30   -> Color.parseColor("#4ADE80")
+        gbp >= 10   -> Color.parseColor("#FBBF24")
+        else        -> Color.parseColor("#8A8F98")
+    }
+
+    /** Circle-crop the fig render (face at the top, like the card's
+     *  object-position 50% 12%) and draw the value ring round it. */
+    private fun ringedFace(src: android.graphics.Bitmap, ring: Int, sizePx: Int): android.graphics.Bitmap {
+        val out = android.graphics.Bitmap.createBitmap(sizePx, sizePx, android.graphics.Bitmap.Config.ARGB_8888)
+        val c = android.graphics.Canvas(out)
+        val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+        val side = minOf(src.width, src.height)
+        val top = ((src.height - side) * 0.12f).toInt().coerceAtLeast(0)
+        val left = (src.width - side) / 2
+        val srcRect = android.graphics.Rect(left, top, left + side, top + side)
+        val stroke = sizePx / 9f
+        val inner = android.graphics.RectF(stroke, stroke, sizePx - stroke, sizePx - stroke)
+        // white disc behind the render (renders are on white, keeps edges clean)
+        paint.color = Color.WHITE
+        c.drawOval(inner, paint)
+        val save = c.save()
+        val clip = android.graphics.Path().apply { addOval(inner, android.graphics.Path.Direction.CW) }
+        c.clipPath(clip)
+        c.drawBitmap(src, srcRect, inner, paint)
+        c.restoreToCount(save)
+        paint.style = android.graphics.Paint.Style.STROKE
+        paint.strokeWidth = stroke
+        paint.color = ring
+        c.drawOval(android.graphics.RectF(stroke / 2, stroke / 2, sizePx - stroke / 2, sizePx - stroke / 2), paint)
+        return out
+    }
+
+    private fun fillRow3(rv: RemoteViews, p: V4Payload, face: android.graphics.Bitmap?, ctx: Context) {
         val seller = p.seller.trim()
         val n = p.figBands?.totalN ?: 0
         val topGbp = p.topFigGbp
-        val hasTop = p.iconColor.isNotBlank() || (topGbp != null && topGbp > 0)
+        val hasTop = p.topFigImg.isNotBlank() || (topGbp != null && topGbp > 0)
         if (seller.isEmpty() && n <= 0 && !hasTop) {
             rv.setViewVisibility(R.id.notif_row3, View.GONE); return
         }
         rv.setViewVisibility(R.id.notif_row3, View.VISIBLE)
         rv.setTextViewText(R.id.notif_seller, seller)
-        // Left of the count: the most valuable identified fig — head tinted
-        // to its value band (icon_color, the listing-card ring colour) and
-        // its £ (Mat, 2026-11-08: "to the left it should show the highest
-        // value figure").
+        // Left of the count: the most valuable identified fig as its real
+        // face, ringed by value exactly as on the listing cards (Mat,
+        // 2026-11-08). Until the face has downloaded, a head tinted to the
+        // ring colour holds the slot. Its £ follows in the same colour.
         if (hasTop) {
-            val tint = try {
-                if (p.iconColor.isNotBlank()) Color.parseColor(p.iconColor) else Color.parseColor("#F2F2F2")
-            } catch (_: Exception) { Color.parseColor("#F2F2F2") }
-            rv.setImageViewResource(R.id.notif_r3_tophead, R.drawable.ic_notification_head)
-            rv.setInt(R.id.notif_r3_tophead, "setColorFilter", tint)
+            val ring = faceRingColor(topGbp)
+            if (face != null) {
+                val px = (18 * ctx.resources.displayMetrics.density).toInt().coerceAtLeast(24)
+                rv.setImageViewBitmap(R.id.notif_r3_tophead, ringedFace(face, ring, px))
+                rv.setInt(R.id.notif_r3_tophead, "setColorFilter", Color.TRANSPARENT)
+            } else {
+                rv.setImageViewResource(R.id.notif_r3_tophead, R.drawable.ic_notification_head)
+                rv.setInt(R.id.notif_r3_tophead, "setColorFilter", ring)
+            }
             rv.setViewVisibility(R.id.notif_r3_tophead, View.VISIBLE)
             if (topGbp != null && topGbp > 0) {
                 rv.setTextViewText(R.id.notif_r3_topgbp, "\u00A3$topGbp")
-                rv.setTextColor(R.id.notif_r3_topgbp, tint)
+                rv.setTextColor(R.id.notif_r3_topgbp, ring)
                 rv.setViewVisibility(R.id.notif_r3_topgbp, View.VISIBLE)
             } else {
                 rv.setViewVisibility(R.id.notif_r3_topgbp, View.GONE)

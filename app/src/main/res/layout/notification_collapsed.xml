@@ -281,10 +281,11 @@
         <!-- most valuable identified fig: head tinted to its value band + "£N" -->
         <ImageView
             android:id="@+id/notif_r3_tophead"
-            android:layout_width="12dp"
-            android:layout_height="12dp"
+            android:layout_width="18dp"
+            android:layout_height="18dp"
             android:layout_marginStart="8dp"
-            android:layout_marginEnd="2dp"
+            android:layout_marginEnd="3dp"
+            android:scaleType="fitCenter"
             android:src="@drawable/ic_notification_head"
             android:visibility="gone"
             android:contentDescription="@null" />

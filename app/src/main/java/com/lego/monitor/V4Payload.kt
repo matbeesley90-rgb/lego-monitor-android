@@ -31,6 +31,8 @@ data class V4Payload(
     val seller: String = "",
     // 2026-11-08: £ of the most valuable identified fig (row 3, beside the band-tinted head)
     val topFigGbp: Int? = null,
+    // 2026-11-08: URL of that fig's face render (Pi /img/fig/<num>), drawn ringed by value
+    val topFigImg: String = "",
     val asking: Double,
     val trueCost: Double,
     val blNew: Double,
@@ -133,6 +135,7 @@ data class V4Payload(
                     profit       = if (o.has("profit") && !o.isNull("profit")) o.optInt("profit") else null,
                     seller       = o.optString("seller", ""),
                     topFigGbp    = if (o.has("top_fig_gbp") && !o.isNull("top_fig_gbp")) o.optInt("top_fig_gbp") else null,
+                    topFigImg    = o.optString("top_fig_img", ""),
                     asking       = o.optDouble("asking", 0.0),
                     trueCost     = o.optDouble("true_cost", 0.0),
                     blNew        = o.optDouble("bl_new", 0.0),

@@ -14,8 +14,8 @@ android {
         // 2026-09-18: versionCode moves with every build from now on so
         // "which build is on the phone" is answerable from the package
         // manager (it sat at 10 from 0.2.1 to 0.2.18).
-        versionCode 17
-        versionName "0.2.25"
+        versionCode 18
+        versionName "0.2.26"
     }
 
     buildTypes {
