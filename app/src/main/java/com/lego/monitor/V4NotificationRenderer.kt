@@ -648,7 +648,10 @@ object V4NotificationRenderer {
             .setColor(if (p.redAlert) Color.parseColor(RED_ALERT_BG)
                       else accent)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setAutoCancel(true)
+            // 2026-11-08 (Mat): a card stays until he swipes it — opening
+            // it (body tap → info sheet) must not remove it. Server
+            // withdrawals (cancel frames) still remove it.
+            .setAutoCancel(false)
             // Same-ID re-posts (the bitmap fill-in, and in-place card
             // updates via replace_key) must not re-buzz.
             .setOnlyAlertOnce(true)
