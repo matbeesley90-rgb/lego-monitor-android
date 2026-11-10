@@ -59,7 +59,7 @@ data class V4Style(
             labelColor  = Color.parseColor("#9AA0A6"),
             valueColor  = Color.WHITE,
             pctPosColor = Color.parseColor("#22C55E"),
-            pctNegColor = Color.parseColor("#EF4444"),
+            pctNegColor = Color.parseColor("#8F949A"),  // a loss reads grey; red = best deal only
         )
 
         // Defaults intentionally match the current baked-in layout

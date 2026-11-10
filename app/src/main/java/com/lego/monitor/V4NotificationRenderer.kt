@@ -44,7 +44,7 @@ object V4NotificationRenderer {
     private const val RED_CHANNEL_ID = "lego_monitor_red"
     // Deep red: strong against both One UI's warm notification shade and
     // a dark background, while leaving white body text readable.
-    private const val RED_ALERT_BG = "#8B0000"
+    private const val RED_ALERT_BG = "#8E1313"
     // Bundles on their own channel (2026-09-18 audit S4) so 📦 pushes can be
     // muted in Android settings independently of set deals. New id on
     // purpose: the legacy "lego_monitor_bundles" channel was created at
@@ -323,10 +323,11 @@ object V4NotificationRenderer {
                 // the old orange diamond); grey when no band applies.
                 expanded.setViewVisibility(R.id.notif_footer_row, View.VISIBLE)
                 // Coloured per-token render when the payload carries parts
-                // (total blue, profit green/red, rest grey); flat text else.
+                // (total blue, profit by band — grey for a loss, rest grey).
                 if (p.bundleParts != null) {
                     expanded.setTextViewText(R.id.notif_footer,
-                        bundleFooterSpannable(p.bundleParts, s))
+                        bundleFooterSpannable(p.bundleParts, s,
+                            bandColor = if (heatBand(p) != "") bandTextColor(p) else null))
                 } else {
                     expanded.setTextViewText(R.id.notif_footer, p.bundleLine)
                 }
@@ -844,23 +845,47 @@ object V4NotificationRenderer {
         }
     }
 
+    /** Heat ramp "D" (Mat, 2026-11-10): hotter = better. yellow ->
+     * orange -> red, and red only ever means the best deal — a loss
+     * reads grey. The Pi sends yellow/orange/red; the names it sent
+     * before (amber = first tier, green = second) map onto the same
+     * two steps so an old payload still renders. */
+    private fun heatBand(p: V4Payload): String = if (p.redAlert) "red" else when (p.band) {
+        "red"             -> "red"
+        "orange", "green" -> "orange"
+        "yellow", "amber" -> "yellow"
+        else              -> ""
+    }
+
+    private val HEAT_YELLOW get() = Color.parseColor("#F2D13A")
+    private val HEAT_ORANGE get() = Color.parseColor("#FF9A3D")
+    private val LOSS_GREY   get() = Color.parseColor("#8F949A")
+
     /** Row text colour for the bundle profit, by band. On the red body the
-     * text goes white; green/amber use the band's own colour; no band =
+     * text goes white; yellow/orange use the band's own colour; no band =
      * muted grey, and the pre-vision "checking…" is dimmer still. */
-    private fun bandTextColor(p: V4Payload): Int = when (p.band) {
-        "red"   -> Color.WHITE
-        "green" -> Color.parseColor("#4CC38A")
-        "amber" -> Color.parseColor("#E8C23A")
-        else    -> if (p.bundleTail.startsWith("checking")) Color.parseColor("#6A6F75")
-                   else Color.parseColor("#8F949A")
+    private fun bandTextColor(p: V4Payload): Int = when (heatBand(p)) {
+        "red"    -> Color.WHITE
+        "orange" -> HEAT_ORANGE
+        "yellow" -> HEAT_YELLOW
+        else     -> if (p.bundleTail.startsWith("checking")) Color.parseColor("#6A6F75")
+                    else LOSS_GREY
     }
 
     /** Body colour for the band — the whole card below the app header. */
-    private fun bandBodyColor(p: V4Payload): Int? = when (p.band) {
-        "red"   -> Color.parseColor(RED_ALERT_BG)
-        "green" -> Color.parseColor("#0F3D27")
-        "amber" -> Color.parseColor("#4A3606")
-        else    -> null
+    private fun bandBodyColor(p: V4Payload): Int? = when (heatBand(p)) {
+        "red"    -> Color.parseColor(RED_ALERT_BG)
+        "orange" -> Color.parseColor("#5E3008")
+        "yellow" -> Color.parseColor("#4A3F06")
+        else     -> null
+    }
+
+    /** Profit colour: the band's own colour on a banded card, green on
+     * a plain one, and GREY for a loss — never red. */
+    private fun profitColor(p: V4Payload, positive: Boolean): Int = when {
+        !positive          -> LOSS_GREY
+        heatBand(p) != ""  -> bandTextColor(p)
+        else               -> Color.parseColor("#4CC38A")
     }
 
     /** The text AFTER the brand wordmark — " • 56%" or
@@ -932,13 +957,14 @@ object V4NotificationRenderer {
      *  on the right the minifig head tinted to the most valuable identified
      *  fig (payload icon_color, the listing-card convention) with the fig
      *  count. Hidden when there is neither a seller nor a count. */
-    /** Ring colour by the fig's value — the listing card's face rings
-     *  (v0 grey, v1 amber £10+, v2 green £30+, v3 red £50+). */
-    private fun faceRingColor(gbp: Int?): Int = when {
+    /** Ring colour by the fig's own value — the same heat ramp as the
+     *  listing card's face rings (grey, yellow £10+, orange £30+, red
+     *  £50+). On a red body the red is lifted so it stays readable. */
+    private fun faceRingColor(gbp: Int?, onRed: Boolean = false): Int = when {
         gbp == null -> Color.parseColor("#8A8F98")
-        gbp >= 50   -> Color.parseColor("#F87171")
-        gbp >= 30   -> Color.parseColor("#4ADE80")
-        gbp >= 10   -> Color.parseColor("#FBBF24")
+        gbp >= 50   -> Color.parseColor(if (onRed) "#FF8A8A" else "#F87171")
+        gbp >= 30   -> HEAT_ORANGE
+        gbp >= 10   -> HEAT_YELLOW
         else        -> Color.parseColor("#8A8F98")
     }
 
@@ -984,7 +1010,7 @@ object V4NotificationRenderer {
         // 2026-11-08). Until the face has downloaded, a head tinted to the
         // ring colour holds the slot. Its £ follows in the same colour.
         if (hasTop) {
-            val ring = faceRingColor(topGbp)
+            val ring = faceRingColor(topGbp, heatBand(p) == "red")
             if (face != null) {
                 val px = (18 * ctx.resources.displayMetrics.density).toInt().coerceAtLeast(24)
                 rv.setImageViewBitmap(R.id.notif_r3_tophead, ringedFace(face, ring, px))
@@ -1029,19 +1055,21 @@ object V4NotificationRenderer {
         var line2 = ""; var c2 = Color.parseColor("#4CC38A")
         if (p.kind == "bundle") {
             line1 = p.bundleTail
-            c1 = bandTextColor(p)
+            // Under the first tier a profit is plain green; a loss is grey.
+            c1 = if (heatBand(p) == "" && line1.startsWith("+")) Color.parseColor("#4CC38A")
+                 else bandTextColor(p)
             val prof = p.bundleParts?.profit?.trim().orEmpty()
             if (prof.isNotEmpty() && p.bundleParts?.warn.isNullOrBlank()) {
                 val pos = p.bundleParts?.positive ?: true
                 line2 = (if (pos && !prof.startsWith("-") && !prof.startsWith("+")) "+" else "") + prof
-                c2 = if (pos) Color.parseColor("#4CC38A") else Color.parseColor("#E5484D")
+                c2 = profitColor(p, pos)
             }
         } else {
             if (p.pct != 0) line1 = "${p.pct}%"
             val pr = p.profit
             if (pr != null) {
                 line2 = (if (pr >= 0) "+£" else "-£") + kotlin.math.abs(pr)
-                c2 = if (pr >= 0) Color.parseColor("#4CC38A") else Color.parseColor("#E5484D")
+                c2 = if (pr >= 0) Color.parseColor("#4CC38A") else LOSS_GREY
             }
         }
         if (line1.isEmpty() && line2.isEmpty()) {
@@ -1105,7 +1133,8 @@ object V4NotificationRenderer {
 
     /** One band slot: a head tinted to the band (or the outline head for
      * figures nobody identified) and "×N". */
-    private fun fillBandSlot(rv: RemoteViews, headId: Int, textId: Int, band: FigBand?) {
+    private fun fillBandSlot(rv: RemoteViews, headId: Int, textId: Int, band: FigBand?,
+                             onRed: Boolean = false) {
         if (band == null || band.n <= 0) {
             rv.setViewVisibility(headId, View.GONE); rv.setViewVisibility(textId, View.GONE); return
         }
@@ -1115,7 +1144,10 @@ object V4NotificationRenderer {
         } else {
             rv.setImageViewResource(headId, R.drawable.ic_notification_head)
             rv.setInt(headId, "setColorFilter",
-                try { Color.parseColor(band.color) } catch (_: Exception) { Color.parseColor("#8B9096") })
+                try {
+                    if (onRed && band.color.equals("#ef4444", ignoreCase = true)) Color.parseColor("#FF8A8A")
+                    else Color.parseColor(band.color)
+                } catch (_: Exception) { Color.parseColor("#8B9096") })
         }
         rv.setTextViewText(textId, "\u00D7${band.n}")
         rv.setViewVisibility(headId, View.VISIBLE); rv.setViewVisibility(textId, View.VISIBLE)
@@ -1140,16 +1172,20 @@ object V4NotificationRenderer {
         expanded.setViewVisibility(R.id.notif_footer_row, View.VISIBLE)
         expanded.setViewVisibility(R.id.notif_footer_head, View.GONE)
         expanded.setViewVisibility(R.id.notif_footer_bands, View.VISIBLE)
-        for (i in FB_H.indices) fillBandSlot(expanded, FB_H[i], FB_N[i], fb.bands.getOrNull(i))
+        val onRed = heatBand(p) == "red"
+        for (i in FB_H.indices) fillBandSlot(expanded, FB_H[i], FB_N[i], fb.bands.getOrNull(i), onRed)
         if (p.kind == "bundle" && p.bundleParts != null) {
-            expanded.setTextViewText(R.id.notif_footer, bundleFooterSpannable(p.bundleParts, s, compact = true))
+            expanded.setTextViewText(R.id.notif_footer, bundleFooterSpannable(p.bundleParts, s, compact = true,
+                bandColor = if (heatBand(p) != "") bandTextColor(p) else null))
         }
     }
 
-    private fun bundleFooterSpannable(b: BundleParts, s: V4Style, compact: Boolean = false): CharSequence {
+    private fun bundleFooterSpannable(b: BundleParts, s: V4Style, compact: Boolean = false,
+                                      bandColor: Int? = null): CharSequence {
         val grey  = Color.parseColor("#9AA0A6")
         val blue  = s.askingColor
-        val money = if (b.positive) s.cellBN.pctPosColor else s.cellBN.pctNegColor
+        // Banded card: the profit takes the band's colour. A loss is grey.
+        val money = if (!b.positive) s.cellBN.pctNegColor else (bandColor ?: s.cellBN.pctPosColor)
         val amber = Color.parseColor("#E0A53B")
         val bold  = android.graphics.Typeface.BOLD
 
