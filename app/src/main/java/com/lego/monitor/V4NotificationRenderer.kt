@@ -849,16 +849,20 @@ object V4NotificationRenderer {
      * orange -> red, and red only ever means the best deal — a loss
      * reads grey. The Pi sends yellow/orange/red; the names it sent
      * before (amber = first tier, green = second) map onto the same
-     * two steps so an old payload still renders. */
+     * two steps so an old payload still renders. 2026-11-12: the bands
+     * are % return on true cost everywhere, and a profit under the first
+     * floor (50%) is LIGHT BLUE. */
     private fun heatBand(p: V4Payload): String = if (p.redAlert) "red" else when (p.band) {
         "red"             -> "red"
         "orange", "green" -> "orange"
         "yellow", "amber" -> "yellow"
+        "blue"            -> "blue"
         else              -> ""
     }
 
     private val HEAT_YELLOW get() = Color.parseColor("#F2D13A")
     private val HEAT_ORANGE get() = Color.parseColor("#FF9A3D")
+    private val HEAT_BLUE   get() = Color.parseColor("#7CC8FF")
     private val LOSS_GREY   get() = Color.parseColor("#8F949A")
 
     /** Row text colour for the bundle profit, by band. On the red body the
@@ -868,6 +872,7 @@ object V4NotificationRenderer {
         "red"    -> Color.WHITE
         "orange" -> HEAT_ORANGE
         "yellow" -> HEAT_YELLOW
+        "blue"   -> HEAT_BLUE
         else     -> if (p.bundleTail.startsWith("checking")) Color.parseColor("#6A6F75")
                     else LOSS_GREY
     }
@@ -877,6 +882,7 @@ object V4NotificationRenderer {
         "red"    -> Color.parseColor(RED_ALERT_BG)
         "orange" -> Color.parseColor("#5E3008")
         "yellow" -> Color.parseColor("#4A3F06")
+        "blue"   -> Color.parseColor("#0F3550")
         else     -> null
     }
 
