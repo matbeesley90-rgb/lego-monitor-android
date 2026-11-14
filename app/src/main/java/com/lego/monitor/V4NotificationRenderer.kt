@@ -742,7 +742,7 @@ object V4NotificationRenderer {
     private fun cardGroup(notifId: Int) = "lm_card_$notifId"
 
     private fun postCardSummary(ctx: Context, notifId: Int, channel: String,
-                                title: String, text: String,
+                                title: CharSequence, text: CharSequence,
                                 tap: PendingIntent?) {
         try {
             val mgr = ctx.getSystemService(NotificationManager::class.java) ?: return
