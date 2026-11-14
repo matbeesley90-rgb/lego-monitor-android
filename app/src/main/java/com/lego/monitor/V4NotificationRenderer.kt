@@ -134,10 +134,11 @@ object V4NotificationRenderer {
             // from bringing it back.
             if (payload.isCancel) {
                 Log.d(TAG, "V4 cancel: removing notifId=$notifId (gen=$gen)")
-                ctx.getSystemService(NotificationManager::class.java)
-                    .cancel(notifId)
+                val mgr = ctx.getSystemService(NotificationManager::class.java)
+                mgr.cancel(notifId)
+                mgr.cancel(SUM_TAG, notifId)      // the card's own summary
                 synchronized(bitmapCache) { bitmapCache.remove(cacheKey(payload)) }
-                postSummary(ctx)
+                sweepSummaries(ctx)
                 return
             }
 
@@ -666,7 +667,7 @@ object V4NotificationRenderer {
             .setStyle(NotificationCompat.DecoratedCustomViewStyle())
             .setContentTitle(contentTitle)
             .setContentText(sellerTitle)
-            .setGroup(GROUP_KEY)
+            .setGroup(cardGroup(notifId))
             .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_CHILDREN)
         // No setLargeIcon: the system's large-icon column narrows every
         // custom view (collapsed AND expanded) and duplicates our thumb.
@@ -715,17 +716,81 @@ object V4NotificationRenderer {
 
         ctx.getSystemService(NotificationManager::class.java)
             .notify(notifId, builder.build())
-        postSummary(ctx)
+        postCardSummary(ctx, notifId, channel, contentTitle, sellerTitle,
+            if (hasIds) infoSheetIntent(ctx, p) else null)
+        sweepSummaries(ctx)
     }
 
     // ── Group summary (2026-11-06, option C) ───────────────────────────
-    // One pill for the pile: "11 new · 3 🔥 · 2 ending" over the newest
-    // titles. Rebuilt from the live notifications on every post, cancel
-    // and dismissal, so it always reflects what is actually in the shade
-    // and vanishes with the last card. GROUP_ALERT_CHILDREN above means
-    // the summary itself never buzzes.
-    private const val GROUP_KEY = "lego_monitor_cards"
-    private const val SUMMARY_ID = 0x5A5A5A
+    // 2026-11-14 (Mat: "can the notifications not be folded into 1?"):
+    // the shared group below was what One UI drew as one pill with a
+    // count. Each card is now a group of its own. A bare card with no
+    // group is bundled by Android itself, and since Android 16 so is a
+    // card whose group has no summary, so every card carries a silent
+    // summary of its own; the shade shows a one-card group as the card.
+    // Android still bundles an app's single-card groups once there are
+    // six of them (AOSP 16 GroupHelper), so only CARD_SUMMARY_MAX cards
+    // carry a summary: the pile past that is bundled by the system on its
+    // own, and a summary there would only eat into the
+    // 50-notifications-per-app cap.
+    private const val GROUP_KEY = "lego_monitor_cards"    // pre-0.2.30 cards
+    private const val SUMMARY_ID = 0x5A5A5A               // pre-0.2.30 pill
+    private const val SUM_TAG = "lm_sum"
+    private const val CARD_SUMMARY_MAX = 5
+    private const val SUMMARY_GRACE_MS = 5000L
+
+    private fun cardGroup(notifId: Int) = "lm_card_$notifId"
+
+    private fun postCardSummary(ctx: Context, notifId: Int, channel: String,
+                                title: String, text: String,
+                                tap: PendingIntent?) {
+        try {
+            val mgr = ctx.getSystemService(NotificationManager::class.java) ?: return
+            val active = mgr.activeNotifications
+            // Already up (a photo fill-in or an in-place redraw of the card).
+            if (active.any { it.tag == SUM_TAG && it.id == notifId }) return
+            if (active.count { it.tag == SUM_TAG } >= CARD_SUMMARY_MAX) return
+            val b = NotificationCompat.Builder(ctx, channel)
+                .setSmallIcon(R.drawable.ic_notification_head)
+                .setColor(Color.parseColor("#3B98E0"))
+                .setContentTitle(title)
+                .setContentText(text)
+                .setGroup(cardGroup(notifId))
+                .setGroupSummary(true)
+                .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_CHILDREN)
+                .setOnlyAlertOnce(true)
+                .setSilent(true)
+                .setAutoCancel(true)
+            if (tap != null) b.setContentIntent(tap)
+            mgr.notify(SUM_TAG, notifId, b.build())
+        } catch (e: Exception) {
+            Log.w(TAG, "card summary post failed", e)
+        }
+    }
+
+    // Remove summaries whose card has gone (swiped, withdrawn), and the
+    // old shared pill once no pre-0.2.30 card is left under it. Cancelling
+    // a summary takes its cards with it, so one is only removed when no
+    // card is listed AND it is old enough that a card posted alongside it
+    // would be listed by now.
+    fun sweepSummaries(ctx: Context) {
+        try {
+            val mgr = ctx.getSystemService(NotificationManager::class.java) ?: return
+            val active = mgr.activeNotifications
+            val now = System.currentTimeMillis()
+            val cardIds = active.filter { it.tag == null }.map { it.id }.toHashSet()
+            active.filter { it.tag == SUM_TAG && it.id !in cardIds &&
+                            now - it.postTime > SUMMARY_GRACE_MS }
+                .forEach { mgr.cancel(SUM_TAG, it.id) }
+            val legacy = active.any { it.tag == null && it.id != SUMMARY_ID &&
+                                      it.notification.group == GROUP_KEY }
+            if (!legacy && active.any { it.tag == null && it.id == SUMMARY_ID }) {
+                mgr.cancel(SUMMARY_ID)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "summary sweep failed", e)
+        }
+    }
 
     private fun nativeTitle(p: V4Payload, timerLive: Boolean): String {
         val parts = ArrayList<String>(5)
@@ -746,46 +811,6 @@ object V4NotificationRenderer {
             parts.add("${p.pct}%")
         }
         return parts.joinToString(" \u00B7 ")
-    }
-
-    fun postSummary(ctx: Context) {
-        try {
-            val mgr = ctx.getSystemService(NotificationManager::class.java) ?: return
-            val children = mgr.activeNotifications
-                .filter { it.notification.group == GROUP_KEY && it.id != SUMMARY_ID }
-                .sortedByDescending { it.postTime }
-            if (children.isEmpty()) { mgr.cancel(SUMMARY_ID); return }
-            val titles = children.map {
-                it.notification.extras.getCharSequence(android.app.Notification.EXTRA_TITLE)?.toString() ?: ""
-            }
-            val hot = titles.count { it.contains("\uD83D\uDD25") }
-            val ending = titles.count { it.contains("\uD83D\uDD28") } +
-                children.count { it.notification.extras.getBoolean(android.app.Notification.EXTRA_CHRONOMETER_COUNT_DOWN, false) }
-            val head = StringBuilder("${children.size} new")
-            if (hot > 0) head.append(" \u00B7 $hot \uD83D\uDD25")
-            if (ending > 0) head.append(" \u00B7 $ending ending")
-            val inbox = NotificationCompat.InboxStyle()
-            titles.take(6).forEach { inbox.addLine(it) }
-            if (children.size > 6) inbox.setSummaryText("+ ${children.size - 6} more")
-            val n = NotificationCompat.Builder(ctx, CHANNEL_ID)
-                .setSmallIcon(R.drawable.ic_notification_head)
-                .setColor(Color.parseColor("#3B98E0"))
-                .setContentTitle(head.toString())
-                .setContentText(titles.take(3).joinToString(" \u00B7 "))
-                .setStyle(inbox)
-                .setGroup(GROUP_KEY)
-                .setGroupSummary(true)
-                .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_CHILDREN)
-                .setSilent(true)
-                .setAutoCancel(true)
-                .setContentIntent(PendingIntent.getActivity(
-                    ctx, SUMMARY_ID, Intent(ctx, MainActivity::class.java),
-                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT))
-                .build()
-            mgr.notify(SUMMARY_ID, n)
-        } catch (e: Exception) {
-            Log.w(TAG, "summary post failed", e)
-        }
     }
 
     // ── Auction countdown (2026-09-18 audit S2) ─────────────────────────
